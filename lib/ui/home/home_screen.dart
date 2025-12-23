@@ -42,122 +42,223 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Parse logic for the home content map would go here.
-    // Since we don't know the EXACT structure of 'data' from 'home' endpoint yet (without running it),
-    // we will assume generic sections for now or try to identify lists.
-    // NOTE: In a real flow, I would inspect the JSON.
-    // I'll assume keys like 'banner_list', 'movie_list', etc. based on common API patterns.
-    
-    // For safety, I'll dump keys to console if running in debug, but here I'll just render what I can.
-    final keys = _homeContent?.keys.toList() ?? [];
-
     return Scaffold(
-      body: Row(
-        children: [
-            // Side Navigation (Collapsible)
-            FocusTraversalGroup(
-              policy: OrderedTraversalPolicy(),
-              child: Container(
-                  width: 80,
-                  color: Theme.of(context).colorScheme.surface,
-                  child: Column(
-                      children: [
-                          const SizedBox(height: 32),
-                          const Icon(Icons.movie, size: 32),
-                          const SizedBox(height: 32),
-                          _NavButton(
-                              icon: Icons.search,
-                              onPressed: () {
-                                  Navigator.of(context).push(
-                                      MaterialPageRoute(builder: (_) => const SearchScreen())
-                                  );
-                              },
-                          ),
-                          const SizedBox(height: 16),
-                          _NavButton(icon: Icons.home, autofocus: true, onPressed: () {}),
-                          const SizedBox(height: 16),
-                          _NavButton(icon: Icons.tv, onPressed: () {}),
-                          const SizedBox(height: 16),
-                          _NavButton(icon: Icons.person, onPressed: () {}),
-                      ],
-                  ),
-              ),
-            ),
-            // Main Content
-            Expanded(
-                child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
+      body: FocusTraversalGroup(
+        // This enables navigation between sidebar and content
+        policy: ReadingOrderTraversalPolicy(),
+        child: Row(
+          children: [
+              // Side Navigation (Collapsible)
+              FocusTraversalGroup(
+                policy: OrderedTraversalPolicy(),
+                child: Container(
+                    width: 80,
+                    color: Theme.of(context).colorScheme.surface,
                     child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                            Text("Featured", style: Theme.of(context).textTheme.headlineMedium),
-                            const SizedBox(height: 16),
-                            // Placeholder for Hero/Banner
-                            Container(
-                                height: 300,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                    color: Colors.grey[800],
-                                    borderRadius: BorderRadius.circular(16),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Text("Featured Content Banner"),
-                            ),
                             const SizedBox(height: 32),
-                            
-                             // Debug: List keys found
-                            Text("API Sections: ${keys.join(', ')}", style: const TextStyle(color: Colors.grey)),
+                            const Icon(Icons.movie, size: 32),
+                            const SizedBox(height: 32),
+                            _NavButton(
+                                icon: Icons.search,
+                                onPressed: () {
+                                    Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (_) => const SearchScreen())
+                                    );
+                                },
+                            ),
                             const SizedBox(height: 16),
-                            
-                            // Render sections if they look like lists
-                            ...keys.map((key) {
-                                final value = _homeContent![key];
-                                if (value is List && value.isNotEmpty) {
-                                  return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                          Text(key.toUpperCase(), style: Theme.of(context).textTheme.titleLarge),
-                                          const SizedBox(height: 12),
-                                          SizedBox(
-                                              height: 220,
-                                              child: FocusTraversalGroup(
-                                                policy: ReadingOrderTraversalPolicy(),
-                                                child: ListView.builder(
-                                                    scrollDirection: Axis.horizontal,
-                                                    itemCount: value.length,
-                                                    itemBuilder: (context, index) {
-                                                        final item = value[index];
-                                                        // Try to parse basic item
-                                                        String? cover;
-                                                        String? title;
-                                                        if (item is Map) {
-                                                            cover = item['cover'] ?? item['img'];
-                                                            title = item['title'] ?? item['name'];
-                                                        }
-                                                        
-                                                        return Padding(
-                                                            padding: const EdgeInsets.only(right: 16),
-                                                            child: TVCard(cover: cover, title: title, onSelect: () {
-                                                                // TODO: Navigate to detail screen
-                                                            }),
-                                                        );
-                                                    },
-                                                ),
-                                              ),
-                                          ),
-                                          const SizedBox(height: 24),
-                                      ],
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                            }),
+                            _NavButton(icon: Icons.home, autofocus: true, onPressed: () {}),
+                            const SizedBox(height: 16),
+                            _NavButton(icon: Icons.tv, onPressed: () {}),
+                            const SizedBox(height: 16),
+                            _NavButton(icon: Icons.person, onPressed: () {}),
                         ],
                     ),
                 ),
-            ),
-        ],
+              ),
+              // Main Content - wrapped in FocusTraversalGroup for D-pad navigation
+              Expanded(
+                  child: FocusTraversalGroup(
+                      policy: ReadingOrderTraversalPolicy(),
+                      child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: _buildHomeContent(context),
+                          ),
+                      ),
+                  ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  List<Widget> _buildHomeContent(BuildContext context) {
+    final widgets = <Widget>[];
+    
+    if (_homeContent == null || _homeContent!.isEmpty) {
+        widgets.add(const Center(child: Text("No content available", style: TextStyle(color: Colors.grey))));
+        return widgets;
+    }
+    
+    // Extract operatingList which contains the main content sections
+    final operatingList = _homeContent!['operatingList'];
+    if (operatingList is List && operatingList.isNotEmpty) {
+        for (final section in operatingList) {
+            if (section is! Map) continue;
+            
+            final type = section['type'] as String?;
+            final title = section['title'] as String?;
+            
+            // Handle BANNER type
+            if (type == 'BANNER') {
+                final banner = section['banner'];
+                if (banner is Map) {
+                    final items = banner['items'];
+                    if (items is List && items.isNotEmpty) {
+                        widgets.add(Text("Featured", style: Theme.of(context).textTheme.headlineMedium));
+                        widgets.add(const SizedBox(height: 16));
+                        widgets.add(
+                            SizedBox(
+                                height: 360,
+                                child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: items.length > 5 ? 5 : items.length, // Limit to 5 items
+                                    itemBuilder: (context, index) {
+                                        final item = items[index];
+                                        if (item is! Map) return const SizedBox.shrink();
+                                        
+                                        // Safely extract image URL
+                                        String? imageUrl;
+                                        final image = item['image'];
+                                        if (image is Map) {
+                                            imageUrl = image['url'] as String?;
+                                        }
+                                        
+                                        // Safely extract title
+                                        String? itemTitle;
+                                        final titleField = item['title'];
+                                        if (titleField is String) {
+                                            itemTitle = titleField;
+                                        }
+                                        
+                                        return Padding(
+                                            padding: const EdgeInsets.only(right: 16),
+                                            child: SizedBox(
+                                                width: 200,
+                                                child: TVCard(
+                                                    cover: imageUrl,
+                                                    title: itemTitle,
+                                                    onSelect: () {},
+                                                ),
+                                            ),
+                                        );
+                                    },
+                                ),
+                            ),
+                        );
+                        widgets.add(const SizedBox(height: 32));
+                    }
+                }
+            }
+            
+            // Handle sections with subjects
+            final subjects = section['subjects'];
+            if (subjects is List && subjects.isNotEmpty) {
+                final sectionTitle = title ?? type ?? 'Content';
+                
+                widgets.add(Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge));
+                widgets.add(const SizedBox(height: 12));
+                widgets.add(
+                    SizedBox(
+                        height: 280,
+                        child: FocusTraversalGroup(
+                            policy: ReadingOrderTraversalPolicy(),
+                            child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: subjects.length,
+                                itemBuilder: (context, index) {
+                                    final item = subjects[index];
+                                    String? cover;
+                                    String? itemTitle;
+                                    
+                                    if (item is Map) {
+                                        // Handle image field (Map with url)
+                                        final image = item['image'];
+                                        if (image is Map) {
+                                            cover = image['url'] as String?;
+                                        }
+                                        
+                                        // Handle cover field (also can be Map with url)
+                                        if (cover == null) {
+                                            final coverField = item['cover'];
+                                            if (coverField is Map) {
+                                                cover = coverField['url'] as String?;
+                                            } else if (coverField is String) {
+                                                cover = coverField;
+                                            }
+                                        }
+                                        
+                                        // Handle title field
+                                        final titleField = item['title'];
+                                        if (titleField is String) {
+                                            itemTitle = titleField;
+                                        } else {
+                                            final nameField = item['name'];
+                                            if (nameField is String) {
+                                                itemTitle = nameField;
+                                            }
+                                        }
+                                    }
+                                    
+                                    return Padding(
+                                        padding: const EdgeInsets.only(right: 16),
+                                        child: TVCard(cover: cover, title: itemTitle, onSelect: () {
+                                            // TODO: Navigate to detail screen
+                                        }),
+                                    );
+                                },
+                            ),
+                        ),
+                    ),
+                );
+                widgets.add(const SizedBox(height: 24));
+            }
+        }
+    }
+    
+    // Fallback: try platformList
+    final platformList = _homeContent!['platformList'];
+    if (platformList is List && platformList.isNotEmpty && widgets.isEmpty) {
+        widgets.add(Text("PLATFORMS", style: Theme.of(context).textTheme.titleLarge));
+        widgets.add(const SizedBox(height: 12));
+        widgets.add(
+            SizedBox(
+                height: 100,
+                child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: platformList.length,
+                    itemBuilder: (context, index) {
+                        final platform = platformList[index];
+                        final name = platform is Map ? platform['name'] as String? : null;
+                        return Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: Chip(label: Text(name ?? 'Unknown')),
+                        );
+                    },
+                ),
+            ),
+        );
+    }
+    
+    if (widgets.isEmpty) {
+        widgets.add(const Center(child: Text("No content to display", style: TextStyle(color: Colors.grey))));
+    }
+    
+    return widgets;
   }
 }
 
@@ -229,16 +330,19 @@ class _TVCardState extends State<TVCard> {
                     ] : [],
                 ),
                 child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                        Expanded(
-                            child: ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
+                        ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: AspectRatio(
+                                aspectRatio: 2/3, // Standard poster aspect ratio
                                 child: widget.cover != null 
                                  ? CachedNetworkImage(
                                      imageUrl: widget.cover!,
                                      fit: BoxFit.cover,
                                      width: double.infinity,
+                                     memCacheWidth: 400, // Optimize memory usage
                                      errorWidget: (_,__,___) => Container(color: Colors.grey[800], child: const Icon(Icons.error)),
                                    )
                                  : Container(color: Colors.grey[800], child: const Icon(Icons.movie)),

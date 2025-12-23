@@ -174,10 +174,16 @@ class MovieboxApi {
     try {
       final response = await _dio.get('/wefeed-h5-bff/web/home');
       if (response.statusCode == 200) {
-          // The API wrapper says 'process_api_response' extracts 'data'.
-          // Usually response.data['data'] if success.
-          if (response.data['data'] != null) {
-              return response.data['data'];
+          // Handle both parsed JSON and raw string responses
+          dynamic data = response.data;
+          
+          // If data is a String, try to parse it as JSON
+          if (data is String) {
+            data = jsonDecode(data);
+          }
+          
+          if (data is Map && data['data'] != null) {
+              return Map<String, dynamic>.from(data['data']);
           }
       }
     } catch (e) {
