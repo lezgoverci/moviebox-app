@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:moviebox_app/api/moviebox_api.dart';
 import 'package:moviebox_app/ui/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
+  await dotenv.load(fileName: ".env");
+  
   
   // TV usually landscape
   await SystemChrome.setPreferredOrientations([

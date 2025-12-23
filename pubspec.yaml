@@ -38,13 +38,15 @@ dependencies:
   dio_cookie_manager: ^3.3.0
   cookie_jar: ^4.0.8
   path_provider: ^2.1.5
-  video_player: ^2.10.1
-  chewie: ^1.13.0
+  media_kit: ^1.1.10
+  media_kit_video: ^1.2.4
+  media_kit_libs_video: ^1.0.4
   google_fonts: ^6.3.3
   provider: ^6.1.5+1
   cached_network_image: ^3.4.1
   html: ^0.15.6
   flutter_animate: ^4.5.2
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -69,8 +71,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
+  assets:
+    - .env
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

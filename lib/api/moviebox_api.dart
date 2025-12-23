@@ -5,12 +5,13 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:html/parser.dart' as doc_parser;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart'; // for kIsWeb
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:moviebox_app/models/movie_models.dart';
 
 class MovieboxApi {
   // API URL from environment variable, fallback to local server
   // Pass via: flutter run --dart-define=MOVIEBOX_API_URL=https://your-ngrok-url.ngrok.io
-  static const String baseUrl = String.fromEnvironment(
+  static String get baseUrl => dotenv.env['MOVIEBOX_API_URL'] ?? const String.fromEnvironment(
     'MOVIEBOX_API_URL',
     defaultValue: 'http://192.168.1.7:8000',
   ); 
@@ -152,7 +153,20 @@ class MovieboxApi {
     return null;
   }
 
-  Future<String?> getStreamingLink(String subjectId, {int season = 1, int episode = 1, String? detailPath}) async {
+  /// Get streaming link for playback.
+  /// 
+  /// [subjectId] - The content ID
+  /// [season] - Season number (1 for movies)
+  /// [episode] - Episode number (1 for movies)
+  /// [detailPath] - URL slug for proper Referer header
+  /// [quality] - Quality preference: "best", "worst", "720", "1080"
+  Future<String?> getStreamingLink(
+    String subjectId, {
+    int season = 1, 
+    int episode = 1, 
+    String? detailPath,
+    String quality = "best",
+  }) async {
     try {
       print('Fetching stream for subjectId: $subjectId, se: $season, ep: $episode, detailPath: $detailPath');
       const String path = '/wefeed-h5-bff/web/subject/play';
@@ -178,19 +192,33 @@ class MovieboxApi {
           
           // Moviebox API usually wraps in 'data'
           final data = responseData['data'] ?? responseData;
+          print("FULL STREAM DATA: ${jsonEncode(data)}");
           
           // Location 1: streams array (primary source)
           if (data['streams'] is List) {
               final List streams = data['streams'];
               if (streams.isNotEmpty) {
-                  // Sort/Filter for best quality (prefer 1080p)
-                  final best = streams.firstWhere(
-                    (it) => it['resolution']?.toString().contains('1080') == true, 
-                    orElse: () => streams.first
-                  );
-                  final url = best['url']?.toString();
+                  // Sort by resolution descending
+                  streams.sort((a, b) => (b['resolutions'] ?? b['resolution'] ?? 0)
+                      .compareTo(a['resolutions'] ?? a['resolution'] ?? 0));
+                  
+                  Map? selected;
+                  if (quality == "worst") {
+                    selected = streams.last;
+                  } else if (int.tryParse(quality) != null) {
+                    final targetRes = int.parse(quality);
+                    selected = streams.firstWhere(
+                      (it) => (it['resolutions'] ?? it['resolution']) == targetRes, 
+                      orElse: () => streams.first
+                    );
+                  } else {
+                    // "best" - highest resolution
+                    selected = streams.first;
+                  }
+                  
+                  final url = selected?['url']?.toString();
                   if (url != null && url.isNotEmpty) {
-                    print('Found stream URL in streams: $url');
+                    print('Found stream URL: $url (${selected?['resolutions'] ?? selected?['resolution']}p)');
                     return url;
                   }
               }
@@ -255,6 +283,128 @@ class MovieboxApi {
       print('Streaming link error: $e');
     }
     return null;
+  }
+
+  /// Get download links with optional subtitles.
+  /// 
+  /// [subjectId] - The content ID
+  /// [season] - Season number (1 for movies)
+  /// [episode] - Episode number (1 for movies)
+  /// [detailPath] - URL slug for proper Referer header
+  /// [quality] - Quality preference: "best", "worst", "720", "1080"
+  /// [language] - Subtitle language code (default: "en" for English)
+  Future<DownloadInfo?> getDownloadLinks(
+    String subjectId, {
+    int season = 1, 
+    int episode = 1, 
+    String? detailPath,
+    String quality = "best",
+    String language = "en",
+  }) async {
+    try {
+      print('Fetching download for subjectId: $subjectId, se: $season, ep: $episode');
+      const String path = '/wefeed-h5-bff/web/subject/download';
+      
+      final options = Options(headers: {
+        if (detailPath != null) 'X-Detail-Path': detailPath,
+      });
+      
+      final response = await _dio.get(path, queryParameters: {
+        'subjectId': subjectId,
+        'se': season,
+        'ep': episode,
+      }, options: options);
+
+      if (response.statusCode == 200 && response.data != null) {
+          dynamic responseData = response.data;
+          if (responseData is String) {
+            responseData = jsonDecode(responseData);
+          }
+          
+          final data = responseData['data'] ?? responseData;
+          
+          // Parse downloads
+          List<MediaDownload> downloads = [];
+          if (data['downloads'] is List) {
+            downloads = (data['downloads'] as List)
+                .map((d) => MediaDownload.fromJson(d))
+                .toList();
+            // Sort by resolution descending
+            downloads.sort((a, b) => b.resolution.compareTo(a.resolution));
+          }
+          
+          // Parse subtitles
+          List<SubtitleInfo> subtitles = [];
+          if (data['captions'] is List) {
+            subtitles = (data['captions'] as List)
+                .map((c) => SubtitleInfo.fromJson(c))
+                .toList();
+          }
+          
+          // Select download by quality
+          MediaDownload? selectedDownload;
+          if (downloads.isNotEmpty) {
+            if (quality == "worst") {
+              selectedDownload = downloads.last;
+            } else if (int.tryParse(quality) != null) {
+              final targetRes = int.parse(quality);
+              selectedDownload = downloads.firstWhere(
+                (d) => d.resolution == targetRes, 
+                orElse: () => downloads.first
+              );
+            } else {
+              selectedDownload = downloads.first;
+            }
+          }
+          
+          // Select subtitle by language (default to English)
+          SubtitleInfo? selectedSubtitle;
+          if (subtitles.isNotEmpty) {
+            selectedSubtitle = subtitles.firstWhere(
+              (s) => s.languageCode == language,
+              orElse: () => subtitles.firstWhere(
+                (s) => s.languageCode == "en",
+                orElse: () => subtitles.first
+              )
+            );
+          }
+          
+          return DownloadInfo(
+            download: selectedDownload,
+            subtitle: selectedSubtitle,
+            allDownloads: downloads,
+            allSubtitles: subtitles,
+            hasResource: data['hasResource'] ?? false,
+          );
+      }
+    } catch (e) {
+      print('Download links error: $e');
+    }
+    return null;
+  }
+
+  /// Get subtitles for content.
+  /// 
+  /// [subjectId] - The content ID
+  /// [season] - Season number (1 for movies)
+  /// [episode] - Episode number (1 for movies)
+  /// [detailPath] - URL slug for proper Referer header
+  /// [language] - Preferred language code (default: "en")
+  Future<SubtitleInfo?> getSubtitle(
+    String subjectId, {
+    int season = 1, 
+    int episode = 1, 
+    String? detailPath,
+    String language = "en",
+  }) async {
+    final downloadInfo = await getDownloadLinks(
+      subjectId,
+      season: season,
+      episode: episode,
+      detailPath: detailPath,
+      language: language,
+    );
+    return downloadInfo?.subtitle;
   }
 
   Future<List<HomeSection>> getHomeContent() async {

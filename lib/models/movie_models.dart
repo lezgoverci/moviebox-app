@@ -24,7 +24,102 @@ class SearchResultItem {
   }
 }
 
+/// Subtitle/caption file information
+class SubtitleInfo {
+  final String id;
+  final String languageCode; // e.g., "en"
+  final String languageName; // e.g., "English"
+  final String url;
+  final int size;
+  final int delay;
+
+  SubtitleInfo({
+    required this.id,
+    required this.languageCode,
+    required this.languageName,
+    required this.url,
+    required this.size,
+    this.delay = 0,
+  });
+
+  factory SubtitleInfo.fromJson(Map<String, dynamic> json) {
+    return SubtitleInfo(
+      id: json['id']?.toString() ?? '',
+      languageCode: json['lan'] ?? 'en',
+      languageName: json['lanName'] ?? 'English',
+      url: json['url'] ?? '',
+      size: json['size'] ?? 0,
+      delay: json['delay'] ?? 0,
+    );
+  }
+
+  bool get isEnglish => languageCode == 'en';
+}
+
+/// Downloadable media file information
+class MediaDownload {
+  final String id;
+  final String url;
+  final int resolution; // e.g., 720, 1080
+  final int size; // in bytes
+
+  MediaDownload({
+    required this.id,
+    required this.url,
+    required this.resolution,
+    required this.size,
+  });
+
+  factory MediaDownload.fromJson(Map<String, dynamic> json) {
+    return MediaDownload(
+      id: json['id']?.toString() ?? '',
+      url: json['url'] ?? '',
+      resolution: json['resolution'] ?? 0,
+      size: json['size'] ?? 0,
+    );
+  }
+
+  String get qualityLabel => '${resolution}p';
+
+  String get sizeLabel {
+    if (size < 1024) return '$size B';
+    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';
+    if (size < 1024 * 1024 * 1024) return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(size / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+}
+
+/// Combined download info with media files and subtitles
+class DownloadInfo {
+  final MediaDownload? download;
+  final SubtitleInfo? subtitle;
+  final List<MediaDownload> allDownloads;
+  final List<SubtitleInfo> allSubtitles;
+  final bool hasResource;
+
+  DownloadInfo({
+    this.download,
+    this.subtitle,
+    required this.allDownloads,
+    required this.allSubtitles,
+    required this.hasResource,
+  });
+
+  SubtitleInfo? get englishSubtitle =>
+      allSubtitles.where((s) => s.isEnglish).firstOrNull ?? subtitle;
+
+  MediaDownload? get bestDownload =>
+      allDownloads.isNotEmpty ? allDownloads.first : download;
+
+  List<String> get qualityOptions =>
+      allDownloads.map((d) => d.qualityLabel).toList();
+
+  List<String> get languageOptions =>
+      allSubtitles.map((s) => s.languageName).toList();
+}
+
 class HomeItem {
+
   final String id;
   final String title;
   final String cover;
@@ -328,7 +423,6 @@ class Season {
     } else if (json['maxEp'] is int) {
       // Fallback: generate episodes if maxEp is present but items are not
       final max = json['maxEp'] as int;
-      final se = json['se'] ?? 1;
       for (int i = 1; i <= max; i++) {
         episodes.add(Episode(
           id: i.toString(),

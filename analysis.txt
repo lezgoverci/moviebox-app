@@ -1,0 +1,47 @@
+Analyzing moviebox-app...                                       
+
+   info • Use interpolation to compose strings and values • lib/api/moviebox_api.dart:40:58 • prefer_interpolation_to_compose_strings
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:54:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:70:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:77:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:79:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:85:7 • avoid_print
+warning • The operand can't be 'null', so the condition is always 'false' • lib/api/moviebox_api.dart:102:18 • unnecessary_null_comparison
+warning • Dead code • lib/api/moviebox_api.dart:102:27 • dead_code
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:103:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:140:16 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:147:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:149:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:150:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:157:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:177:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:181:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:194:21 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:206:21 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:218:21 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:232:19 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:239:15 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:251:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:253:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:256:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/moviebox_api.dart:284:7 • avoid_print
+warning • The value of the local variable 'se' isn't used • lib/models/movie_models.dart:331:13 • unused_local_variable
+  error • The argument type 'String?' can't be assigned to the parameter type 'String'.  • lib/ui/details/details_screen.dart:68:29 • argument_type_not_assignable
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/ui/details/details_screen.dart:111:46 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/ui/details/details_screen.dart:118:42 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/ui/details/details_screen.dart:118:45 • unnecessary_underscores
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/ui/details/details_screen.dart:135:76 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/ui/details/details_screen.dart:147:54 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/ui/details/details_screen.dart:147:57 • unnecessary_underscores
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/ui/details/details_screen.dart:180:117 • deprecated_member_use
+   info • The type name 'RoundedRectangle_8' isn't an UpperCamelCase identifier • lib/ui/details/details_screen.dart:256:7 • camel_case_types
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/ui/details/details_screen.dart:288:67 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/ui/home/home_screen.dart:228:55 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/ui/home/home_screen.dart:255:56 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/ui/home/home_screen.dart:255:59 • unnecessary_underscores
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/ui/home/home_screen.dart:328:44 • deprecated_member_use
+   info • Don't invoke 'print' in production code • lib/ui/player/player_screen.dart:37:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/ui/player/player_screen.dart:41:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/ui/player/player_screen.dart:54:5 • avoid_print
+
+43 issues found. (ran in 13.1s)

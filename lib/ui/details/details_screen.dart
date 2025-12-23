@@ -65,6 +65,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
               builder: (_) => PlayerScreen(
                 videoUrl: streamUrl,
                 title: title ?? _detail!.title,
+                detailPath: _detail!.detailPath ?? '',
               ),
             ),
           );
