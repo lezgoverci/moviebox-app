@@ -102,154 +102,173 @@ class _DetailsScreenState extends State<DetailsScreen> {
     final detail = _detail!;
     // Use cover as backdrop, blurred/darkened
     return Scaffold(
-      body: Stack(
-          children: [
-               // Backdrop
-               Positioned.fill(
-                   child: RepaintBoundary(
-                     child: CachedNetworkImage(
-                         imageUrl: detail.cover,
-                         fit: BoxFit.cover,
-                         color: Colors.black.withOpacity(0.8),
-                         colorBlendMode: BlendMode.darken,
-                         memCacheHeight: 480, // Reduced from 1080
-                         httpHeaders: const {
-                           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                           'Referer': 'https://moviebox.ph',
-                         },
-                         errorWidget: (_,__,___) => Container(color: Colors.black),
+      body: Shortcuts(
+        shortcuts: <LogicalKeySet, Intent>{
+          LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.arrowUp): const DirectionalFocusIntent(TraversalDirection.up),
+          LogicalKeySet(LogicalKeyboardKey.arrowDown): const DirectionalFocusIntent(TraversalDirection.down),
+          LogicalKeySet(LogicalKeyboardKey.arrowLeft): const DirectionalFocusIntent(TraversalDirection.left),
+          LogicalKeySet(LogicalKeyboardKey.arrowRight): const DirectionalFocusIntent(TraversalDirection.right),
+        },
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (intent) {
+                 // The focusable children will handle this via their own CallbackAction or VoidCallback
+                 return null;
+              },
+            ),
+          },
+          child: FocusTraversalGroup(
+            policy: ReadingOrderTraversalPolicy(),
+            child: Stack(
+                children: [
+                     // Backdrop
+                     Positioned.fill(
+                         child: RepaintBoundary(
+                           child: CachedNetworkImage(
+                               imageUrl: detail.cover,
+                               fit: BoxFit.cover,
+                               color: Colors.black.withOpacity(0.8),
+                               colorBlendMode: BlendMode.darken,
+                               memCacheHeight: 480, // Reduced from 1080
+                               httpHeaders: const {
+                                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                 'Referer': 'https://moviebox.ph',
+                               },
+                               errorWidget: (_,__,___) => Container(color: Colors.black),
+                           ),
+                         ),
                      ),
-                   ),
-               ),
-               
-               // Content
-               SingleChildScrollView(
-                 padding: const EdgeInsets.all(48.0),
-                 child: Row(
-                     crossAxisAlignment: CrossAxisAlignment.start,
-                     children: [
-                         // Poster
-                         Container(
-                             width: 260,
-                             height: 390,
-                             decoration: BoxDecoration(
-                                 borderRadius: BorderRadius.circular(12),
-                                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)],
-                             ),
-                             child: ClipRRect(
-                                 borderRadius: BorderRadius.circular(12),
-                                 child: CachedNetworkImage(
-                                     imageUrl: detail.cover,
-                                     fit: BoxFit.cover,
-                                     memCacheWidth: 400,
-                                     httpHeaders: const {
-                                       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                       'Referer': 'https://moviebox.ph',
-                                     },
-                                     errorWidget: (_,__,___) => Container(color: Colors.grey[800], child: const Icon(Icons.error)),
-                                 ),
-                             ),
-                         ),
-                         const SizedBox(width: 48),
-                         
-                         // Details
-                         Expanded(
-                             child: Column(
-                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                 children: [
-                                     Text(detail.title, 
-                                         style: Theme.of(context).textTheme.displaySmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold)
+                     
+                     // Content
+                     SingleChildScrollView(
+                       padding: const EdgeInsets.all(48.0),
+                       child: FocusTraversalGroup(
+                         child: Row(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+                                 // Poster
+                                 Container(
+                                     width: 260,
+                                     height: 390,
+                                     decoration: BoxDecoration(
+                                         borderRadius: BorderRadius.circular(12),
+                                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)],
                                      ),
-                                     const SizedBox(height: 16),
-                                     Row(
-                                         children: [
-                                             const Icon(Icons.star, color: Colors.amber, size: 20),
-                                             const SizedBox(width: 4),
-                                             Text(detail.rating, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                             const SizedBox(width: 16),
-                                             Text(detail.releaseDate, style: const TextStyle(color: Colors.white70)),
-                                             const SizedBox(width: 16),
-                                             ...detail.genres.map((g) => Container(
-                                                 margin: const EdgeInsets.only(right: 8),
-                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                 decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(4)),
-                                                 child: Text(g, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-                                             )).take(3),
-                                         ],
-                                     ),
-                                     const SizedBox(height: 24),
-                                     Text(detail.description, 
-                                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white.withOpacity(0.9), height: 1.5),
-                                         maxLines: 6,
-                                         overflow: TextOverflow.ellipsis,
-                                     ),
-                                     const SizedBox(height: 32),
-                                     
-                                     // Actions
-                                     Row(
-                                         children: [
-                                             ElevatedButton.icon(
-                                                 icon: const Icon(Icons.play_arrow),
-                                                 label: const Text("Play Now"),
-                                                 style: ElevatedButton.styleFrom(
-                                                     backgroundColor: Theme.of(context).primaryColor,
-                                                     foregroundColor: Colors.white,
-                                                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
-                                                     shape: RoundedRectangle_8(),
-                                                 ),
-                                                 onPressed: () => _playVideo(),
-                                             ),
-                                             const SizedBox(width: 16),
-                                             OutlinedButton.icon(
-                                                  icon: const Icon(Icons.download),
-                                                  label: const Text("Download"),
-                                                  style: OutlinedButton.styleFrom(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
-                                                      shape: RoundedRectangle_8(),
-                                                  ),
-                                                  onPressed: () {
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                          const SnackBar(content: Text("Download started... (using player for preview)"))
-                                                      );
-                                                      _playVideo();
-                                                  },
-                                             ),
-                                         ],
-                                     ),
-
-                                     // Seasons/Episodes
-                                     if (detail.isSeries) ...[
-                                         const SizedBox(height: 48),
-                                         Text("Episodes", style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                                         const SizedBox(height: 16),
-                                         SizedBox(
-                                             height: 140,
-                                             child: ListView.builder(
-                                                 scrollDirection: Axis.horizontal,
-                                                 itemCount: detail.seasons.isNotEmpty ? detail.seasons.first.episodes.length : 0,
-                                                 itemBuilder: (context, index) {
-                                                     final episode = detail.seasons.first.episodes[index];
-                                                     return Padding(
-                                                         padding: const EdgeInsets.only(right: 16),
-                                                         child: _EpisodeCard(
-                                                             episode: episode,
-                                                             onSelect: () => _playVideo(
-                                                               episodeId: episode.id,
-                                                               title: "${detail.title} - ${episode.title}"
-                                                             ),
-                                                         ),
-                                                     );
-                                                 },
-                                             ),
+                                     child: ClipRRect(
+                                         borderRadius: BorderRadius.circular(12),
+                                         child: CachedNetworkImage(
+                                             imageUrl: detail.cover,
+                                             fit: BoxFit.cover,
+                                             memCacheWidth: 400,
+                                             httpHeaders: const {
+                                               'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                               'Referer': 'https://moviebox.ph',
+                                             },
+                                             errorWidget: (_,__,___) => Container(color: Colors.grey[800], child: const Icon(Icons.error)),
                                          ),
-                                     ],
-                                 ],
-                             ),
+                                     ),
+                                 ),
+                                 const SizedBox(width: 48),
+                                 
+                                 // Details
+                                 Expanded(
+                                     child: Column(
+                                         crossAxisAlignment: CrossAxisAlignment.start,
+                                         children: [
+                                             Text(detail.title, 
+                                                 style: Theme.of(context).textTheme.displaySmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold)
+                                             ),
+                                             const SizedBox(height: 16),
+                                             Row(
+                                                 children: [
+                                                     const Icon(Icons.star, color: Colors.amber, size: 20),
+                                                     const SizedBox(width: 4),
+                                                     Text(detail.rating, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                     const SizedBox(width: 16),
+                                                     Text(detail.releaseDate, style: const TextStyle(color: Colors.white70)),
+                                                     const SizedBox(width: 16),
+                                                     ...detail.genres.map((g) => Container(
+                                                         margin: const EdgeInsets.only(right: 8),
+                                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                         decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(4)),
+                                                         child: Text(g, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                                                     )).take(3),
+                                                 ],
+                                             ),
+                                             const SizedBox(height: 24),
+                                             Text(detail.description, 
+                                                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white.withOpacity(0.9), height: 1.5),
+                                                 maxLines: 6,
+                                                 overflow: TextOverflow.ellipsis,
+                                             ),
+                                             const SizedBox(height: 32),
+                                             
+                                             // Actions
+                                             Row(
+                                                 children: [
+                                                     _TVButton(
+                                                       icon: Icons.play_arrow,
+                                                       label: "Play Now",
+                                                       autofocus: true,
+                                                       onPressed: () => _playVideo(),
+                                                       primary: true,
+                                                     ),
+                                                     const SizedBox(width: 16),
+                                                     _TVButton(
+                                                       icon: Icons.download,
+                                                       label: "Download",
+                                                       onPressed: () {
+                                                           ScaffoldMessenger.of(context).showSnackBar(
+                                                               const SnackBar(content: Text("Download started... (using player for preview)"))
+                                                           );
+                                                           _playVideo();
+                                                       },
+                                                     ),
+                                                 ],
+                                             ),
+          
+                                             // Seasons/Episodes
+                                             if (detail.isSeries) ...[
+                                                 const SizedBox(height: 48),
+                                                 Text("Episodes", style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                                                 const SizedBox(height: 16),
+                                                 SizedBox(
+                                                     height: 140,
+                                                     child: FocusTraversalGroup(
+                                                       child: ListView.builder(
+                                                           scrollDirection: Axis.horizontal,
+                                                           itemCount: detail.seasons.isNotEmpty ? detail.seasons.first.episodes.length : 0,
+                                                           itemBuilder: (context, index) {
+                                                               final episode = detail.seasons.first.episodes[index];
+                                                               return Padding(
+                                                                   padding: const EdgeInsets.only(right: 16),
+                                                                   child: _EpisodeCard(
+                                                                       episode: episode,
+                                                                       onSelect: () => _playVideo(
+                                                                         episodeId: episode.id,
+                                                                         title: "${detail.title} - ${episode.title}"
+                                                                       ),
+                                                                   ),
+                                                               );
+                                                           },
+                                                       ),
+                                                     ),
+                                                 ),
+                                             ],
+                                         ],
+                                     ),
+                                 ),
+                             ],
                          ),
-                     ],
-                 ),
-               ),
-          ],
+                       ),
+                     ),
+                ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -257,6 +276,93 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
 class RoundedRectangle_8 extends RoundedRectangleBorder {
   RoundedRectangle_8() : super(borderRadius: BorderRadius.circular(8));
+}
+
+class _TVButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final bool autofocus;
+  final bool primary;
+
+  const _TVButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.autofocus = false,
+    this.primary = false,
+  });
+
+  @override
+  State<_TVButton> createState() => _TVButtonState();
+}
+
+class _TVButtonState extends State<_TVButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      autofocus: widget.autofocus,
+      onFocusChange: (focused) {
+        setState(() => _focused = focused);
+        if (focused) {
+           Scrollable.ensureVisible(
+             context,
+             alignment: 0.5,
+             duration: const Duration(milliseconds: 200),
+           );
+        }
+      },
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) => widget.onPressed(),
+        ),
+      },
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          decoration: BoxDecoration(
+            color: _focused 
+                ? (widget.primary ? Colors.white : Colors.white.withOpacity(0.2)) 
+                : (widget.primary ? Theme.of(context).primaryColor : Colors.transparent),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _focused ? Colors.white : (widget.primary ? Colors.transparent : Colors.white24),
+              width: 2,
+            ),
+            boxShadow: _focused ? [
+              BoxShadow(color: (widget.primary ? Theme.of(context).primaryColor : Colors.white).withOpacity(0.3), blurRadius: 15)
+            ] : [],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.icon,
+                color: _focused && widget.primary ? Colors.black : Colors.white,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: _focused && widget.primary ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EpisodeCard extends StatefulWidget {
@@ -273,7 +379,16 @@ class _EpisodeCardState extends State<_EpisodeCard> {
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
-        onFocusChange: (f) => setState(() => _focused = f),
+        onFocusChange: (f) {
+           setState(() => _focused = f);
+           if (f) {
+             Scrollable.ensureVisible(
+               context,
+               alignment: 0.5,
+               duration: const Duration(milliseconds: 200),
+             );
+           }
+        },
         shortcuts: <ShortcutActivator, Intent>{
             const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
             const SingleActivator(LogicalKeyboardKey.enter): const ActivateIntent(),
@@ -290,6 +405,9 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                     color: _focused ? Colors.white : Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(8),
                     border: _focused ? Border.all(color: Colors.white, width: 2) : Border.all(color: Colors.transparent, width: 2),
+                    boxShadow: _focused ? [
+                      BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 10)
+                    ] : [],
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(

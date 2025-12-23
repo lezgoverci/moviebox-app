@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -18,42 +19,38 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-
 class _PlayerScreenState extends State<PlayerScreen> {
   // Create a [Player] to control playback.
   late final player = Player();
   // Create a [VideoController] to handle video output from [Player].
   late final controller = VideoController(player);
 
-  String _status = 'Initializing...';
+  bool _loading = true;
   String _error = '';
 
   @override
   void initState() {
     super.initState();
     
-    // Listen to events
-    player.stream.log.listen((event) {
-      print("[MediaKit Log] $event");
-    });
+    // Enter immersive full-screen mode
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     
+    // Listen to events
     player.stream.error.listen((event) {
       print("[MediaKit Error] $event");
-      setState(() => _error = "Error: $event");
+      if (mounted) setState(() => _error = "Playback Error: $event");
     });
 
     player.stream.buffering.listen((percent) {
-        // print("[MediaKit Buffering] $percent%");
-        setState(() => _status = "Buffering: $percent%");
+        if (mounted) setState(() => _loading = percent);
     });
 
     player.stream.playing.listen((playing) {
-        if (playing) setState(() => _status = "Playing");
+        if (playing && mounted) setState(() => _loading = false);
     });
 
     print("Opening video: ${widget.videoUrl}");
 
-    // Play a [Media] or [Playlist].
     player.open(Media(
       widget.videoUrl,
       httpHeaders: {
@@ -67,6 +64,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    // Restore system UI mode
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     player.dispose();
     super.dispose();
   }
@@ -75,40 +74,62 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text(widget.title),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: MediaQuery.of(context).size.width,
-              height: MediaQuery.of(context).size.width * 9.0 / 16.0,
-              // Use [Video] widget to display video output.
-              child: Video(controller: controller),
+      body: Stack(
+        children: [
+          // 1. Full-screen Video
+          Positioned.fill(
+            child: Video(
+              controller: controller,
+              fill: Colors.black,
             ),
-            if (_error.isNotEmpty)
-                Container(
-                    color: Colors.black54,
-                    padding: const EdgeInsets.all(16),
-                    child: Text(_error, style: const TextStyle(color: Colors.red)),
-                )
-            else if (_status.contains("Buffering") || _status.contains("Initializing"))
-                Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 8),
-                        Text(_status, style: const TextStyle(color: Colors.white)),
-                        const SizedBox(height: 4),
-                        Text(widget.videoUrl, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                    ],
+          ),
+          
+          // 2. Back Button (Transparent Header area)
+          Positioned(
+            top: 16,
+            left: 16,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+                onPressed: () => Navigator.of(context).pop(),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black26,
+                  shape: const CircleBorder(),
                 ),
-          ],
-        ),
+              ),
+            ),
+          ),
+
+          // 3. Error Overlay
+          if (_error.isNotEmpty)
+            Center(
+              child: Container(
+                color: Colors.black87,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    Text(_error, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text("Go Back"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // 4. Loading Overlay (Buffering)
+          if (_loading && _error.isEmpty)
+            const Center(
+              child: CircularProgressIndicator(
+                color: Colors.white70,
+              ),
+            ),
+        ],
       ),
     );
   }
