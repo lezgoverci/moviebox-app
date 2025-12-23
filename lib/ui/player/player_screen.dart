@@ -181,15 +181,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
               ),
 
-            // 2c. Play/Pause Overlay
+            // 2c. Playback Controls (Rewind, Play/Pause, Fast-Forward)
             Center(
-              child: IconButton(
-                icon: Icon(
-                  player.state.playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                  color: Colors.white70,
-                  size: 80,
-                ),
-                onPressed: () => player.playOrPause(),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _PlayerControlButton(
+                    icon: Icons.replay_10,
+                    size: 48,
+                    onPressed: () {
+                      final position = player.state.position;
+                      player.seek(position - const Duration(seconds: 10));
+                    },
+                    tooltip: "Rewind 10s",
+                  ),
+                  const SizedBox(width: 32),
+                  StreamBuilder<bool>(
+                    stream: player.stream.playing,
+                    builder: (context, snapshot) {
+                      final isPlaying = snapshot.data ?? player.state.playing;
+                      return _PlayerControlButton(
+                        icon: isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                        size: 80,
+                        onPressed: () => player.playOrPause(),
+                        tooltip: isPlaying ? "Pause" : "Play",
+                        primary: true,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 32),
+                  _PlayerControlButton(
+                    icon: Icons.forward_10,
+                    size: 48,
+                    onPressed: () {
+                      final position = player.state.position;
+                      player.seek(position + const Duration(seconds: 10));
+                    },
+                    tooltip: "Fast Forward 10s",
+                  ),
+                ],
               ),
             ),
           ],
@@ -224,6 +254,55 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _PlayerControlButton extends StatefulWidget {
+  final IconData icon;
+  final double size;
+  final VoidCallback onPressed;
+  final String tooltip;
+  final bool primary;
+
+  const _PlayerControlButton({
+    required this.icon,
+    required this.size,
+    required this.onPressed,
+    required this.tooltip,
+    this.primary = false,
+  });
+
+  @override
+  State<_PlayerControlButton> createState() => _PlayerControlButtonState();
+}
+
+class _PlayerControlButtonState extends State<_PlayerControlButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      onFocusChange: (f) => setState(() => _focused = f),
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => widget.onPressed()),
+      },
+      child: IconButton(
+        icon: Icon(widget.icon),
+        iconSize: widget.size,
+        color: _focused ? Colors.white : (widget.primary ? Colors.white : Colors.white70),
+        onPressed: widget.onPressed,
+        tooltip: widget.tooltip,
+        style: IconButton.styleFrom(
+          backgroundColor: _focused ? Colors.white.withOpacity(0.2) : Colors.transparent,
+          side: _focused ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none,
+          padding: const EdgeInsets.all(12),
+        ),
       ),
     );
   }
