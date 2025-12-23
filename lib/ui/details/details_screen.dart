@@ -17,6 +17,8 @@ class DetailsScreen extends StatefulWidget {
 class _DetailsScreenState extends State<DetailsScreen> {
   MovieDetail? _detail;
   bool _loading = true;
+  List<SubtitleInfo> _subtitles = [];
+  SubtitleInfo? _selectedSubtitle;
 
   @override
   void initState() {
@@ -31,8 +33,19 @@ class _DetailsScreenState extends State<DetailsScreen> {
       if (mounted) {
         setState(() {
           _detail = detail;
-          _loading = false;
         });
+        
+        // Fetch subtitles
+        final downloadInfo = await api.getDownloadLinks(detail!.id, detailPath: detail.detailPath);
+        if (mounted) {
+          setState(() {
+            _subtitles = downloadInfo?.allSubtitles ?? [];
+            if (_subtitles.isNotEmpty) {
+              _selectedSubtitle = _subtitles.firstWhere((s) => s.languageCode == 'en', orElse: () => _subtitles.first);
+            }
+            _loading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -68,6 +81,8 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 videoUrl: streamUrl,
                 title: title ?? _detail!.title,
                 detailPath: _detail!.detailPath ?? '',
+                subtitles: _subtitles,
+                initialSubtitle: _selectedSubtitle,
               ),
             ),
           );
@@ -204,6 +219,24 @@ class _DetailsScreenState extends State<DetailsScreen> {
                                                  maxLines: 6,
                                                  overflow: TextOverflow.ellipsis,
                                              ),
+                                             const SizedBox(height: 24),
+
+                                             // Subtitle Selection
+                                             if (_subtitles.isNotEmpty) ...[
+                                               Text("Subtitles:", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                                               const SizedBox(height: 8),
+                                               Wrap(
+                                                 spacing: 8,
+                                                 children: _subtitles.map((sub) {
+                                                   final isSelected = _selectedSubtitle?.id == sub.id;
+                                                   return _TVChoiceChip(
+                                                     label: sub.languageName,
+                                                     isSelected: isSelected,
+                                                     onSelected: () => setState(() => _selectedSubtitle = sub),
+                                                   );
+                                                 }).toList(),
+                                               ),
+                                             ],
                                              const SizedBox(height: 32),
                                              
                                              // Actions
@@ -437,6 +470,72 @@ class _EpisodeCardState extends State<_EpisodeCard> {
                 ),
             ),
         ),
+    );
+  }
+}
+
+class _TVChoiceChip extends StatefulWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onSelected;
+
+  const _TVChoiceChip({
+    required this.label,
+    required this.isSelected,
+    required this.onSelected,
+  });
+
+  @override
+  State<_TVChoiceChip> createState() => _TVChoiceChipState();
+}
+
+class _TVChoiceChipState extends State<_TVChoiceChip> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      onFocusChange: (f) {
+        setState(() => _focused = f);
+        if (f) {
+          Scrollable.ensureVisible(
+            context,
+            alignment: 0.5,
+            duration: const Duration(milliseconds: 200),
+          );
+        }
+      },
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => widget.onSelected()),
+      },
+      child: GestureDetector(
+        onTap: widget.onSelected,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: widget.isSelected 
+                ? Colors.red 
+                : (_focused ? Colors.white.withOpacity(0.2) : Colors.white.withOpacity(0.05)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _focused ? Colors.white : (widget.isSelected ? Colors.red : Colors.white24),
+              width: 2,
+            ),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: widget.isSelected || _focused ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

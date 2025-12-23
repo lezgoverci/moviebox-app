@@ -19,7 +19,7 @@ class SearchResultItem {
       title: json['title'] ?? '',
       cover: json['cover'] ?? '',
       pageUrl: json['url'] ?? '', // API usually returns 'url' which is relative
-      subjectType: json['domainType'] ?? 0,
+      subjectType: HomeItem._toInt(json['domainType']) ?? 0,
     );
   }
 }
@@ -48,8 +48,8 @@ class SubtitleInfo {
       languageCode: json['lan'] ?? 'en',
       languageName: json['lanName'] ?? 'English',
       url: json['url'] ?? '',
-      size: json['size'] ?? 0,
-      delay: json['delay'] ?? 0,
+      size: HomeItem._toInt(json['size']) ?? 0,
+      delay: HomeItem._toInt(json['delay']) ?? 0,
     );
   }
 
@@ -74,8 +74,8 @@ class MediaDownload {
     return MediaDownload(
       id: json['id']?.toString() ?? '',
       url: json['url'] ?? '',
-      resolution: json['resolution'] ?? 0,
-      size: json['size'] ?? 0,
+      resolution: HomeItem._toInt(json['resolution']) ?? 0,
+      size: HomeItem._toInt(json['size']) ?? 0,
     );
   }
 
@@ -482,7 +482,7 @@ class Episode {
          id: json['id']?.toString() ?? '',
          title: json['title'] ?? json['name'] ?? '',
          streamUrl: url,
-         episodeNumber: json['episode'] ?? json['sort'] ?? 0,
+         episodeNumber: HomeItem._toInt(json['episode'] ?? json['sort']) ?? 0,
      );
   }
 }

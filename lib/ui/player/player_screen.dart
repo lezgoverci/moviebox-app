@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:moviebox_app/models/movie_models.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String title;
   final String detailPath;
+  final List<SubtitleInfo> subtitles;
+  final SubtitleInfo? initialSubtitle;
 
   const PlayerScreen({
     super.key,
     required this.videoUrl,
     required this.title,
     required this.detailPath,
+    this.subtitles = const [],
+    this.initialSubtitle,
   });
 
   @override
@@ -27,6 +32,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool _loading = true;
   String _error = '';
+  SubtitleInfo? _currentSubtitle;
+  bool _showControls = true;
 
   @override
   void initState() {
@@ -51,6 +58,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     print("Opening video: ${widget.videoUrl}");
 
+    _currentSubtitle = widget.initialSubtitle;
+
     player.open(Media(
       widget.videoUrl,
       httpHeaders: {
@@ -60,6 +69,53 @@ class _PlayerScreenState extends State<PlayerScreen> {
         'Origin': 'https://h5.aoneroom.com',
       },
     ));
+
+    if (_currentSubtitle != null) {
+      player.setSubtitleTrack(SubtitleTrack.uri(_currentSubtitle!.url, title: _currentSubtitle!.languageName));
+    }
+  }
+
+  void _toggleControls() {
+    setState(() => _showControls = !_showControls);
+  }
+
+  void _showSubtitlePicker() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black87,
+        title: const Text("Select Subtitles", style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: 300,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: widget.subtitles.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return ListTile(
+                  title: const Text("None", style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    player.setSubtitleTrack(SubtitleTrack.no());
+                    setState(() => _currentSubtitle = null);
+                    Navigator.pop(context);
+                  },
+                );
+              }
+              final sub = widget.subtitles[index - 1];
+              return ListTile(
+                title: Text(sub.languageName, style: const TextStyle(color: Colors.white)),
+                trailing: _currentSubtitle?.id == sub.id ? const Icon(Icons.check, color: Colors.blue) : null,
+                onTap: () {
+                  player.setSubtitleTrack(SubtitleTrack.uri(sub.url, title: sub.languageName));
+                  setState(() => _currentSubtitle = sub);
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -78,27 +134,65 @@ class _PlayerScreenState extends State<PlayerScreen> {
         children: [
           // 1. Full-screen Video
           Positioned.fill(
-            child: Video(
-              controller: controller,
-              fill: Colors.black,
-            ),
-          ),
-          
-          // 2. Back Button (Transparent Header area)
-          Positioned(
-            top: 16,
-            left: 16,
-            child: SafeArea(
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-                onPressed: () => Navigator.of(context).pop(),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black26,
-                  shape: const CircleBorder(),
-                ),
+            child: GestureDetector(
+              onTap: _toggleControls,
+              child: Video(
+                controller: controller,
+                fill: Colors.black,
+                controls: NoVideoControls, // We can customize or hide default ones
               ),
             ),
           ),
+          
+          // 2. Custom Overlay Controls
+          if (_showControls) ...[
+            // 2a. Back Button
+            Positioned(
+              top: 16,
+              left: 16,
+              child: SafeArea(
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black26,
+                    shape: const CircleBorder(),
+                  ),
+                ),
+              ),
+            ),
+
+            // 2b. Subtitle/Settings Button
+            if (widget.subtitles.isNotEmpty)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: SafeArea(
+                  child: IconButton(
+                    icon: const Icon(Icons.closed_caption, color: Colors.white, size: 30),
+                    onPressed: _showSubtitlePicker,
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black26,
+                      shape: const CircleBorder(),
+                      padding: const EdgeInsets.all(12),
+                    ),
+                    tooltip: "Subtitles",
+                  ),
+                ),
+              ),
+
+            // 2c. Play/Pause Overlay
+            Center(
+              child: IconButton(
+                icon: Icon(
+                  player.state.playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                  color: Colors.white70,
+                  size: 80,
+                ),
+                onPressed: () => player.playOrPause(),
+              ),
+            ),
+          ],
 
           // 3. Error Overlay
           if (_error.isNotEmpty)

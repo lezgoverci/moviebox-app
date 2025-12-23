@@ -331,8 +331,16 @@ class MovieboxApi {
           // Parse downloads
           List<MediaDownload> downloads = [];
           if (data['downloads'] is List) {
+            print("Downloads raw: ${data['downloads']}");
             downloads = (data['downloads'] as List)
-                .map((d) => MediaDownload.fromJson(d))
+                .map((d) {
+                  try {
+                    return MediaDownload.fromJson(d);
+                  } catch (e) {
+                    print("MediaDownload.fromJson error for $d: $e");
+                    rethrow;
+                  }
+                })
                 .toList();
             // Sort by resolution descending
             downloads.sort((a, b) => b.resolution.compareTo(a.resolution));
@@ -341,8 +349,16 @@ class MovieboxApi {
           // Parse subtitles
           List<SubtitleInfo> subtitles = [];
           if (data['captions'] is List) {
+            print("Captions raw: ${data['captions']}");
             subtitles = (data['captions'] as List)
-                .map((c) => SubtitleInfo.fromJson(c))
+                .map((c) {
+                  try {
+                    return SubtitleInfo.fromJson(c);
+                  } catch (e) {
+                    print("SubtitleInfo.fromJson error for $c: $e");
+                    rethrow;
+                  }
+                })
                 .toList();
           }
           
