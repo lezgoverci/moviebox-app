@@ -8,7 +8,12 @@ import 'package:flutter/foundation.dart'; // for kIsWeb
 import 'package:moviebox_app/models/movie_models.dart';
 
 class MovieboxApi {
-  static const String baseUrl = 'https://moviebox.ph'; 
+  // API URL from environment variable, fallback to local server
+  // Pass via: flutter run --dart-define=MOVIEBOX_API_URL=https://your-ngrok-url.ngrok.io
+  static const String baseUrl = String.fromEnvironment(
+    'MOVIEBOX_API_URL',
+    defaultValue: 'http://192.168.1.7:8000',
+  ); 
   static const String appInfopath = '/wefeed-h5-bff/app/get-latest-app-pkgs?app_name=moviebox';
   static const String searchSuggestPath = '/wefeed-h5-bff/web/subject/search-suggest';
   
@@ -22,6 +27,8 @@ class MovieboxApi {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': baseUrl,
         'Origin': baseUrl,
+        // Skip ngrok's browser warning page for free tier
+        'ngrok-skip-browser-warning': 'true',
       },
        validateStatus: (status) => status != null && status < 500,
     ));
