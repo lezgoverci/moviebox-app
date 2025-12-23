@@ -76,13 +76,14 @@ class _SearchScreenState extends State<SearchScreen> {
                   itemCount: _results.length,
                   itemBuilder: (context, index) {
                       final item = _results[index];
-                      return GestureDetector(
-                          onTap: () {
+                      return TVCard(
+                          cover: item.cover, 
+                          title: item.title,
+                          onSelect: () {
                                Navigator.of(context).push(
                                    MaterialPageRoute(builder: (_) => DetailsScreen(url: item.pageUrl))
                                );
                           },
-                          child: TVCard(cover: item.cover, title: item.title),
                       );
                   },
               ),

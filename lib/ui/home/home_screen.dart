@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moviebox_app/api/moviebox_api.dart';
 import 'package:moviebox_app/models/movie_models.dart';
+import 'package:moviebox_app/ui/details/details_screen.dart';
 import 'package:moviebox_app/ui/search/search_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -14,7 +15,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Map<String, dynamic>? _homeContent;
+  List<HomeSection>? _sections;
   bool _loading = true;
 
   @override
@@ -25,10 +26,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadContent() async {
     final api = context.read<MovieboxApi>();
-    final content = await api.getHomeContent();
+    final sections = await api.getHomeContent();
     if (mounted) {
       setState(() {
-        _homeContent = content;
+        _sections = sections;
         _loading = false;
       });
     }
@@ -43,15 +44,23 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      body: FocusTraversalGroup(
-        // This enables navigation between sidebar and content
-        policy: ReadingOrderTraversalPolicy(),
-        child: Row(
-          children: [
-              // Side Navigation (Collapsible)
-              FocusTraversalGroup(
-                policy: OrderedTraversalPolicy(),
-                child: Container(
+      body: Shortcuts(
+        shortcuts: <LogicalKeySet, Intent>{
+          LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.arrowUp): const DirectionalFocusIntent(TraversalDirection.up),
+          LogicalKeySet(LogicalKeyboardKey.arrowDown): const DirectionalFocusIntent(TraversalDirection.down),
+          LogicalKeySet(LogicalKeyboardKey.arrowLeft): const DirectionalFocusIntent(TraversalDirection.left),
+          LogicalKeySet(LogicalKeyboardKey.arrowRight): const DirectionalFocusIntent(TraversalDirection.right),
+        },
+        child: FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: Row(
+            children: [
+                // Side Navigation
+                FocusTraversalGroup(
+                  policy: OrderedTraversalPolicy(),
+                  child: Container(
                     width: 80,
                     color: Theme.of(context).colorScheme.surface,
                     child: Column(
@@ -77,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                 ),
               ),
-              // Main Content - wrapped in FocusTraversalGroup for D-pad navigation
+              // Main Content
               Expanded(
                   child: FocusTraversalGroup(
                       policy: ReadingOrderTraversalPolicy(),
@@ -93,169 +102,62 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   List<Widget> _buildHomeContent(BuildContext context) {
     final widgets = <Widget>[];
     
-    if (_homeContent == null || _homeContent!.isEmpty) {
+    if (_sections == null || _sections!.isEmpty) {
         widgets.add(const Center(child: Text("No content available", style: TextStyle(color: Colors.grey))));
         return widgets;
     }
     
-    // Extract operatingList which contains the main content sections
-    final operatingList = _homeContent!['operatingList'];
-    if (operatingList is List && operatingList.isNotEmpty) {
-        for (final section in operatingList) {
-            if (section is! Map) continue;
-            
-            final type = section['type'] as String?;
-            final title = section['title'] as String?;
-            
-            // Handle BANNER type
-            if (type == 'BANNER') {
-                final banner = section['banner'];
-                if (banner is Map) {
-                    final items = banner['items'];
-                    if (items is List && items.isNotEmpty) {
-                        widgets.add(Text("Featured", style: Theme.of(context).textTheme.headlineMedium));
-                        widgets.add(const SizedBox(height: 16));
+    for (final section in _sections!) {
+        final isBanner = section.type == 'BANNER';
+        final sectionTitle = section.title.isNotEmpty ? section.title : section.type;
+        
+        if (isBanner) {
+            widgets.add(Text("Featured", style: Theme.of(context).textTheme.headlineMedium));
+        } else {
+            widgets.add(Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge));
+        }
+        
+        widgets.add(const SizedBox(height: 16));
+        
                         widgets.add(
                             SizedBox(
                                 height: 360,
                                 child: ListView.builder(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
                                     scrollDirection: Axis.horizontal,
-                                    itemCount: items.length > 5 ? 5 : items.length, // Limit to 5 items
+                                    itemCount: isBanner && section.items.length > 5 ? 5 : section.items.length,
                                     itemBuilder: (context, index) {
-                                        final item = items[index];
-                                        if (item is! Map) return const SizedBox.shrink();
-                                        
-                                        // Safely extract image URL
-                                        String? imageUrl;
-                                        final image = item['image'];
-                                        if (image is Map) {
-                                            imageUrl = image['url'] as String?;
-                                        }
-                                        
-                                        // Safely extract title
-                                        String? itemTitle;
-                                        final titleField = item['title'];
-                                        if (titleField is String) {
-                                            itemTitle = titleField;
-                                        }
+                                        final item = section.items[index];
                                         
                                         return Padding(
                                             padding: const EdgeInsets.only(right: 16),
-                                            child: SizedBox(
-                                                width: 200,
-                                                child: TVCard(
-                                                    cover: imageUrl,
-                                                    title: itemTitle,
-                                                    onSelect: () {},
-                                                ),
+                                            child: TVCard(
+                                                cover: item.cover,
+                                                title: item.title,
+                                                width: isBanner ? 200 : 140,
+                                                onSelect: () {
+                                                    final path = item.routerPath;
+                                                    if (path.isNotEmpty) {
+                                                        Navigator.of(context).push(
+                                                            MaterialPageRoute(
+                                                                builder: (_) => DetailsScreen(url: path),
+                                                            ),
+                                                        );
+                                                    }
+                                                },
                                             ),
                                         );
                                     },
                                 ),
                             ),
                         );
-                        widgets.add(const SizedBox(height: 32));
-                    }
-                }
-            }
-            
-            // Handle sections with subjects
-            final subjects = section['subjects'];
-            if (subjects is List && subjects.isNotEmpty) {
-                final sectionTitle = title ?? type ?? 'Content';
-                
-                widgets.add(Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge));
-                widgets.add(const SizedBox(height: 12));
-                widgets.add(
-                    SizedBox(
-                        height: 280,
-                        child: FocusTraversalGroup(
-                            policy: ReadingOrderTraversalPolicy(),
-                            child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: subjects.length,
-                                itemBuilder: (context, index) {
-                                    final item = subjects[index];
-                                    String? cover;
-                                    String? itemTitle;
-                                    
-                                    if (item is Map) {
-                                        // Handle image field (Map with url)
-                                        final image = item['image'];
-                                        if (image is Map) {
-                                            cover = image['url'] as String?;
-                                        }
-                                        
-                                        // Handle cover field (also can be Map with url)
-                                        if (cover == null) {
-                                            final coverField = item['cover'];
-                                            if (coverField is Map) {
-                                                cover = coverField['url'] as String?;
-                                            } else if (coverField is String) {
-                                                cover = coverField;
-                                            }
-                                        }
-                                        
-                                        // Handle title field
-                                        final titleField = item['title'];
-                                        if (titleField is String) {
-                                            itemTitle = titleField;
-                                        } else {
-                                            final nameField = item['name'];
-                                            if (nameField is String) {
-                                                itemTitle = nameField;
-                                            }
-                                        }
-                                    }
-                                    
-                                    return Padding(
-                                        padding: const EdgeInsets.only(right: 16),
-                                        child: TVCard(cover: cover, title: itemTitle, onSelect: () {
-                                            // TODO: Navigate to detail screen
-                                        }),
-                                    );
-                                },
-                            ),
-                        ),
-                    ),
-                );
-                widgets.add(const SizedBox(height: 24));
-            }
-        }
-    }
-    
-    // Fallback: try platformList
-    final platformList = _homeContent!['platformList'];
-    if (platformList is List && platformList.isNotEmpty && widgets.isEmpty) {
-        widgets.add(Text("PLATFORMS", style: Theme.of(context).textTheme.titleLarge));
-        widgets.add(const SizedBox(height: 12));
-        widgets.add(
-            SizedBox(
-                height: 100,
-                child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: platformList.length,
-                    itemBuilder: (context, index) {
-                        final platform = platformList[index];
-                        final name = platform is Map ? platform['name'] as String? : null;
-                        return Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: Chip(label: Text(name ?? 'Unknown')),
-                        );
-                    },
-                ),
-            ),
-        );
-    }
-    
-    if (widgets.isEmpty) {
-        widgets.add(const Center(child: Text("No content to display", style: TextStyle(color: Colors.grey))));
+        widgets.add(SizedBox(height: isBanner ? 32 : 24));
     }
     
     return widgets;
@@ -266,8 +168,9 @@ class TVCard extends StatefulWidget {
   final String? cover;
   final String? title;
   final VoidCallback? onSelect;
+  final double width;
 
-  const TVCard({super.key, this.cover, this.title, this.onSelect});
+  const TVCard({super.key, this.cover, this.title, this.onSelect, this.width = 140});
 
   @override
   State<TVCard> createState() => _TVCardState();
@@ -292,11 +195,19 @@ class _TVCardState extends State<TVCard> {
     return FocusableActionDetector(
         focusNode: _focusNode,
         autofocus: false,
-        onShowFocusHighlight: (focused) {
+        shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        },
+        actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) => _handleSelect(),
+            ),
+        },
+        onFocusChange: (focused) {
             setState(() {
                 _focused = focused;
             });
-            // Scroll into view when focused
             if (focused) {
               Scrollable.ensureVisible(
                 context,
@@ -305,28 +216,16 @@ class _TVCardState extends State<TVCard> {
               );
             }
         },
-        shortcuts: const <ShortcutActivator, Intent>{
-            SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-            SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
-        },
-        actions: <Type, Action<Intent>>{
-            ActivateIntent: CallbackAction<ActivateIntent>(
-              onInvoke: (_) => _handleSelect(),
-            ),
-        },
         child: GestureDetector(
             onTap: _handleSelect,
             child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                transform: Matrix4.identity()..scale(_focused ? 1.1 : 1.0),
-                width: 140, // standard poster width
+                duration: const Duration(milliseconds: 150),
+                width: widget.width,
                 decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    border: _focused ? Border.all(color: Colors.white, width: 2) : null,
+                    border: _focused ? Border.all(color: Colors.white, width: 3) : Border.all(color: Colors.transparent, width: 3),
                     boxShadow: _focused ? [
-                        BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 4))
+                        BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 8))
                     ] : [],
                 ),
                 child: Column(
@@ -336,28 +235,43 @@ class _TVCardState extends State<TVCard> {
                         ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: AspectRatio(
-                                aspectRatio: 2/3, // Standard poster aspect ratio
-                                child: widget.cover != null 
+                                aspectRatio: 2/3,
+                                child: widget.cover != null && widget.cover!.isNotEmpty
                                  ? CachedNetworkImage(
-                                     imageUrl: widget.cover!,
-                                     fit: BoxFit.cover,
-                                     width: double.infinity,
-                                     memCacheWidth: 400, // Optimize memory usage
-                                     errorWidget: (_,__,___) => Container(color: Colors.grey[800], child: const Icon(Icons.error)),
+                                       imageUrl: widget.cover!,
+                                       fit: BoxFit.cover,
+                                       width: double.infinity,
+                                       // Memory optimization: cache images at the size they are displayed
+                                       memCacheWidth: (widget.width * MediaQuery.of(context).devicePixelRatio).round(),
+                                       fadeInDuration: const Duration(milliseconds: 200),
+                                       httpHeaders: const {
+                                         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                         'Referer': 'https://moviebox.ph',
+                                       },
+                                       placeholder: (context, url) => Container(
+                                           color: Colors.grey[900],
+                                           child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                                       ),
+                                       errorWidget: (_,__,___) => Container(color: Colors.grey[800], child: const Icon(Icons.error)),
                                    )
-                                 : Container(color: Colors.grey[800], child: const Icon(Icons.movie)),
+                                 : Container(color: Colors.grey[800], child: const Icon(Icons.movie, size: 40)),
                             ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                            widget.title ?? "Unknown",
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: _focused ? Colors.white : Colors.grey[400],
-                                fontWeight: _focused ? FontWeight.bold : FontWeight.normal,
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                              widget.title ?? "Unknown",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: _focused ? Colors.white : Colors.grey[400],
+                                  fontWeight: _focused ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                              ),
+                          ),
                         ),
+                        const SizedBox(height: 4),
                     ],
                 ),
             ),
@@ -395,7 +309,10 @@ class _NavButtonState extends State<_NavButton> {
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
         SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
         SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.mediaPlay): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.mediaPlayPause): ActivateIntent(),
       },
       actions: <Type, Action<Intent>>{
         ActivateIntent: CallbackAction<ActivateIntent>(

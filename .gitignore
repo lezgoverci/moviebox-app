@@ -72,3 +72,5 @@ lib/generated_plugin_registrant.dart
 flutter_sdk/
 jdk-17.0.17+10/
 java17.tar.gz
+
+.env

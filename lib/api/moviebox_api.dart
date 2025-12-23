@@ -74,103 +74,190 @@ class MovieboxApi {
 
   Future<MovieDetail?> getDetails(String urlPath) async {
     try {
+      print('Fetching details for: $urlPath');
       final response = await _dio.get(urlPath);
+      print('Response status: ${response.statusCode}');
       final html = response.data.toString();
-      final document = doc_parser.parse(html);
-
-      // Find <script type="application/json">
-      final scripts = document.querySelectorAll('script[type="application/json"]');
-      if (scripts.isEmpty) return null;
-
-      // The python scraper logic:
-      // data = loads(from_script)
-      // resolve_value (recursive)
-      // target_data = extracts[0]["state"][1]
       
-      // We assume the first JSON script is the one we want.
-      // Usually it's the big one.
-      String jsonText = scripts.first.text;
-      
-      // Decode
-      dynamic data = jsonDecode(jsonText);
-      if (data is! List) return null; // Logic expects list
-
-      // Helper for resolution
-      dynamic resolveValue(dynamic value) {
-        if (value is List) {
-          return value.map((index) {
-             if (index is int && index < data.length) {
-               return resolveValue(data[index]); // Resolve reference
-             } else {
-               return resolveValue(index); // Already value? Or recurse?
-             }
-          }).toList();
-        } else if (value is Map) {
-          Map<String, dynamic> processed = {};
-          value.forEach((k, v) {
-             if (v is int && v < data.length) {
-               processed[k.toString()] = resolveValue(data[v]);
-             } else {
-               processed[k.toString()] = resolveValue(v);
-             }
-          });
-          return processed;
-        }
-        return value;
-      }
-
-      // Root scan
-      List<Map<String, dynamic>> extracts = [];
-      for (var entry in data) {
-        if (entry is Map) { // Dictionary entries in the root array
-           Map<String, dynamic> details = {};
-           entry.forEach((k, v) {
-              if (v is int && v < data.length) {
-                details[k.toString()] = resolveValue(data[v]);
-              } else {
-                details[k.toString()] = resolveValue(v);
-              }
-           });
-           extracts.add(details);
-        }
-      }
-
-      if (extracts.isNotEmpty) {
-        // Python: target_data = extracts[0]["state"][1]
-        // Keys have ^$ prefix
-        final state = extracts[0]['state'];
-        if (state is List && state.length > 1) {
-            final targetData = state[1]; // The main data
-            if (targetData is Map) {
-                Map<String, dynamic> cleanedData = {};
-                targetData.forEach((k, v) {
-                    if (k.toString().startsWith('^\$')) {
-                        cleanedData[k.toString().substring(2)] = v;
-                    } else {
-                        cleanedData[k.toString()] = v;
-                    }
-                });
-                
-                // Now we have the "resData" inside cleanedData? 
-                // Wait, Python says `dict(zip([k[2:]...], vals))`
-                // So the keys are `^$resData` -> `resData`.
-                
-                if (cleanedData['resData'] != null) {
-                    return MovieDetail.fromJson(cleanedData['resData']);
-                }
-            }
-        }
-      }
-
-
+      // Offload heavy parsing to a background isolate
+      return await compute(_parseDetails, html);
     } catch (e) {
-      print('GetDetails error: $e');
+      print('GetDetails error for $urlPath: $e');
       rethrow;
+    }
+  }
+
+  // Top-level function for compute (must be outside the class or static)
+  static MovieDetail? _parseDetails(String html) {
+    try {
+      final document = doc_parser.parse(html);
+      var script = document.getElementById('__NUXT_DATA__');
+      
+      if (script == null) {
+          final scripts = document.querySelectorAll('script[type="application/json"]');
+          script = scripts.firstWhere((s) => s.text.contains('metadata') && s.text.contains('subject'), 
+              orElse: () => scripts.isNotEmpty ? scripts.first : script!);
+      }
+
+      if (script == null) {
+          print("Parse Error: No JSON script found");
+          return null;
+      }
+
+      final List<dynamic> pool = jsonDecode(script.text);
+      final Map<int, dynamic> cache = {};
+
+      dynamic resolve(dynamic val, Set<int> visited) {
+        if (val is! int || val < 0 || val >= pool.length) return val;
+        if (cache.containsKey(val)) return cache[val];
+        if (visited.contains(val)) return null;
+
+        visited.add(val);
+        final raw = pool[val];
+        dynamic resolved;
+
+        if (raw is List) {
+          resolved = raw.map((e) => resolve(e, visited)).toList();
+        } else if (raw is Map) {
+          resolved = raw.map((k, v) => MapEntry(k.toString(), resolve(v, visited)));
+        } else {
+          resolved = raw;
+        }
+
+        visited.remove(val);
+        cache[val] = resolved;
+        return resolved;
+      }
+
+      // Search exhaustive for resData
+      for (int i = 0; i < pool.length; i++) {
+        final item = pool[i];
+        if (item is Map && (item.containsKey('metadata') || item.containsKey('subject') || item.containsKey('resource') || item.containsKey('resData') || item.containsKey('\$sresData'))) {
+           final resolved = resolve(i, {});
+           if (resolved is Map) {
+             final data = resolved.containsKey('metadata') ? resolved : (resolved['resData'] ?? resolved['\$sresData']);
+             if (data is Map && data.containsKey('metadata')) {
+               print("Successfully found resData at index $i");
+               return MovieDetail.fromJson(Map<String, dynamic>.from(data));
+             }
+           }
+        }
+      }
+      
+      print("Parse Error: Detail object not found in pool");
+    } catch (e, stack) {
+      print('Parse details error: $e');
+      print(stack);
     }
     return null;
   }
 
-  Future<Map<String, dynamic>> getHomeContent() async {
+  Future<String?> getStreamingLink(String subjectId, {int season = 1, int episode = 1, String? detailPath}) async {
+    try {
+      print('Fetching stream for subjectId: $subjectId, se: $season, ep: $episode, detailPath: $detailPath');
+      const String path = '/wefeed-h5-bff/web/subject/play';
+      
+      // Build custom headers with detailPath for correct Referer
+      final options = Options(headers: {
+        if (detailPath != null) 'X-Detail-Path': detailPath,
+      });
+      
+      final response = await _dio.get(path, queryParameters: {
+        'subjectId': subjectId,
+        'se': season,
+        'ep': episode,
+      }, options: options);
+
+      if (response.statusCode == 200 && response.data != null) {
+          dynamic responseData = response.data;
+          if (responseData is String) {
+            responseData = jsonDecode(responseData);
+          }
+          
+          print('Stream API Response keys: ${responseData.keys}');
+          
+          // Moviebox API usually wraps in 'data'
+          final data = responseData['data'] ?? responseData;
+          
+          // Location 1: streams array (primary source)
+          if (data['streams'] is List) {
+              final List streams = data['streams'];
+              if (streams.isNotEmpty) {
+                  // Sort/Filter for best quality (prefer 1080p)
+                  final best = streams.firstWhere(
+                    (it) => it['resolution']?.toString().contains('1080') == true, 
+                    orElse: () => streams.first
+                  );
+                  final url = best['url']?.toString();
+                  if (url != null && url.isNotEmpty) {
+                    print('Found stream URL in streams: $url');
+                    return url;
+                  }
+              }
+          }
+          
+          // Location 2: dash array (DASH streaming)
+          if (data['dash'] is List) {
+              final List dash = data['dash'];
+              if (dash.isNotEmpty) {
+                  final url = dash.first['url']?.toString();
+                  if (url != null && url.isNotEmpty) {
+                    print('Found stream URL in dash: $url');
+                    return url;
+                  }
+              }
+          }
+          
+          // Location 3: hls array (HLS streaming)
+          if (data['hls'] is List) {
+              final List hls = data['hls'];
+              if (hls.isNotEmpty) {
+                  final url = hls.first['url']?.toString();
+                  if (url != null && url.isNotEmpty) {
+                    print('Found stream URL in hls: $url');
+                    return url;
+                  }
+              }
+          }
+          
+          // Legacy fallback: items list (resolution variants)
+          if (data['items'] is List) {
+              final List items = data['items'];
+              if (items.isNotEmpty) {
+                  final best = items.firstWhere(
+                    (it) => it['resolution'].toString().contains('1080'), 
+                    orElse: () => items.first
+                  );
+                  print('Found stream URL in items: ${best['url']}');
+                  return best['url']?.toString();
+              }
+          }
+          
+          // Legacy fallback: Direct videoAddress
+          if (data['videoAddress'] != null) {
+              print('Found stream URL in videoAddress: ${data['videoAddress']}');
+              return data['videoAddress'].toString();
+          }
+
+          // Legacy fallback: resources list
+          if (data['resource'] != null && data['resource']['items'] is List) {
+              final List items = data['resource']['items'];
+              if (items.isNotEmpty) {
+                  return items.first['url']?.toString();
+              }
+          }
+          
+          print('No stream URL found in data structure: $data');
+      } else {
+          print('Stream API failed with status: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Streaming link error: $e');
+    }
+    return null;
+  }
+
+  Future<List<HomeSection>> getHomeContent() async {
     try {
       final response = await _dio.get('/wefeed-h5-bff/web/home');
       if (response.statusCode == 200) {
@@ -183,12 +270,18 @@ class MovieboxApi {
           }
           
           if (data is Map && data['data'] != null) {
-              return Map<String, dynamic>.from(data['data']);
+              final operatingList = data['data']['operatingList'];
+              if (operatingList is List) {
+                return operatingList
+                    .map((e) => HomeSection.fromJson(e as Map<String, dynamic>))
+                    .where((s) => s.items.isNotEmpty)
+                    .toList();
+              }
           }
       }
     } catch (e) {
       print('Home content error: $e');
     }
-    return {};
+    return [];
   }
 }

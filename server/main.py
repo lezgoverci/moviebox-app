@@ -1,6 +1,6 @@
 """
 FastAPI Proxy Server for Moviebox API
-Runs on local network so Chromecast can access moviebox.ph through your Mac.
+Optimized based on moviebox-api tool analysis.
 """
 
 from fastapi import FastAPI, Request, Response
@@ -20,16 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Target API
-MOVIEBOX_BASE_URL = "https://moviebox.ph"
+# Primary Target (Most stable for Nuxt 3 and play API)
+TARGET_BASE_URL = "https://h5.aoneroom.com"
 
 # Persistent client with cookies
 client = httpx.AsyncClient(
-    base_url=MOVIEBOX_BASE_URL,
+    base_url=TARGET_BASE_URL,
     headers={
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": MOVIEBOX_BASE_URL,
-        "Origin": MOVIEBOX_BASE_URL,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": TARGET_BASE_URL,
+        "Origin": TARGET_BASE_URL,
     },
     follow_redirects=True,
     timeout=30.0,
@@ -42,7 +42,7 @@ async def startup():
     try:
         # Fetch app info to establish session cookies
         await client.get("/wefeed-h5-bff/app/get-latest-app-pkgs?app_name=moviebox")
-        print("✓ Moviebox session initialized")
+        print(f"✓ Moviebox session initialized on {TARGET_BASE_URL}")
     except Exception as e:
         print(f"⚠ Failed to init cookies: {e}")
 
@@ -54,7 +54,7 @@ async def shutdown():
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Moviebox Proxy Server", "target": MOVIEBOX_BASE_URL}
+    return {"status": "ok", "message": "Moviebox Proxy Server", "target": TARGET_BASE_URL}
 
 
 @app.get("/health")
@@ -64,7 +64,7 @@ async def health():
 
 @app.api_route("/wefeed-h5-bff/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_api(path: str, request: Request):
-    """Proxy all /wefeed-h5-bff/* requests to moviebox.ph"""
+    """Proxy all /wefeed-h5-bff/* requests"""
     
     full_path = f"/wefeed-h5-bff/{path}"
     
@@ -81,36 +81,48 @@ async def proxy_api(path: str, request: Request):
     # Forward headers (filter out host-specific ones)
     headers = {}
     for key, value in request.headers.items():
-        if key.lower() not in ["host", "content-length"]:
-            headers[key] = value
+        key_lower = key.lower()
+        if key_lower in ["host", "content-length"]:
+            continue
+        
+        # Translate Referer/Origin to target domain
+        # Exclude original Referer/Origin; we will set them centrally
+        if key_lower in ["referer", "origin"]:
+            continue
+            
+        headers[key] = value
+
+    # Set default Referer/Origin for all requests
+    headers["Referer"] = TARGET_BASE_URL
+    headers["Origin"] = TARGET_BASE_URL
     
+    # Special handling for /play endpoint which requires specific Referer
+    if "subject/play" in path:
+        # Read detailPath from custom header (sent by Flutter app)
+        detail_path = request.headers.get("x-detail-path")
+        if detail_path:
+            # Use /movies/{detailPath} format - required by API to return streams
+            headers["Referer"] = f"{TARGET_BASE_URL}/movies/{detail_path}"
+            print(f"Proxying play request with Referer: {headers['Referer']}")
+
     try:
-        # Make the proxied request
         if request.method == "GET":
             response = await client.get(full_path, headers=headers)
         elif request.method == "POST":
-            # Check if JSON
             content_type = request.headers.get("content-type", "")
             if "application/json" in content_type:
                 response = await client.post(full_path, content=body, headers=headers)
             else:
                 response = await client.post(full_path, data=body, headers=headers)
-        elif request.method == "PUT":
-            response = await client.put(full_path, content=body, headers=headers)
-        elif request.method == "DELETE":
-            response = await client.delete(full_path, headers=headers)
         else:
             response = await client.request(request.method, full_path, content=body, headers=headers)
         
-        # Filter out headers that don't apply after decompression by httpx
-        # httpx automatically decompresses gzip/deflate responses
         filtered_headers = {}
         skip_headers = {"content-encoding", "content-length", "transfer-encoding"}
         for key, value in response.headers.items():
             if key.lower() not in skip_headers:
                 filtered_headers[key] = value
         
-        # Return the response
         return Response(
             content=response.content,
             status_code=response.status_code,
@@ -135,10 +147,21 @@ async def proxy_html(path: str, request: Request):
     if query_string:
         full_path = f"{full_path}?{query_string}"
     
-    try:
-        response = await client.get(full_path)
+    # Forward headers from the request
+    headers = {}
+    for key, value in request.headers.items():
+        key_lower = key.lower()
+        if key_lower in ["host", "content-length"]:
+            continue
         
-        # Filter out compression headers since httpx decompresses
+        if key_lower in ["referer", "origin"]:
+            headers[key] = TARGET_BASE_URL
+        else:
+            headers[key] = value
+
+    try:
+        response = await client.get(full_path, headers=headers)
+        
         filtered_headers = {}
         skip_headers = {"content-encoding", "content-length", "transfer-encoding"}
         for key, value in response.headers.items():
@@ -161,7 +184,4 @@ async def proxy_html(path: str, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting Moviebox Proxy Server...")
-    print("Access at: http://0.0.0.0:8000")
-    print("Your Chromecast should connect to: http://192.168.1.7:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

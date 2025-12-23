@@ -135,7 +135,7 @@
     },
     {
       "name": "flutter",
-      "rootUri": "file:///Users/cruzr/projects/moviebox-app/flutter_sdk/packages/flutter",
+      "rootUri": "file:///Users/cruzr/flutter/packages/flutter",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -165,13 +165,13 @@
     },
     {
       "name": "flutter_test",
-      "rootUri": "file:///Users/cruzr/projects/moviebox-app/flutter_sdk/packages/flutter_test",
+      "rootUri": "file:///Users/cruzr/flutter/packages/flutter_test",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
     {
       "name": "flutter_web_plugins",
-      "rootUri": "file:///Users/cruzr/projects/moviebox-app/flutter_sdk/packages/flutter_web_plugins",
+      "rootUri": "file:///Users/cruzr/flutter/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -345,7 +345,7 @@
     },
     {
       "name": "sky_engine",
-      "rootUri": "file:///Users/cruzr/projects/moviebox-app/flutter_sdk/bin/cache/pkg/sky_engine",
+      "rootUri": "file:///Users/cruzr/flutter/bin/cache/pkg/sky_engine",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -526,7 +526,7 @@
   ],
   "generator": "pub",
   "generatorVersion": "3.10.4",
-  "flutterRoot": "file:///Users/cruzr/projects/moviebox-app/flutter_sdk",
+  "flutterRoot": "file:///Users/cruzr/flutter",
   "flutterVersion": "3.38.5",
   "pubCache": "file:///Users/cruzr/.pub-cache"
 }
