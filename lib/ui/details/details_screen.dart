@@ -36,7 +36,11 @@ class _DetailsScreenState extends State<DetailsScreen> {
         });
         
         // Fetch subtitles
-        final downloadInfo = await api.getDownloadLinks(detail!.id, detailPath: detail.detailPath);
+        final downloadInfo = await api.getDownloadLinks(
+          detail!.id, 
+          detailPath: detail.detailPath,
+          isSeries: detail.isSeries,
+        );
         if (mounted) {
           setState(() {
             _subtitles = downloadInfo?.allSubtitles ?? [];

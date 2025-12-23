@@ -300,14 +300,18 @@ class MovieboxApi {
   /// [language] - Subtitle language code (default: "en" for English)
   Future<DownloadInfo?> getDownloadLinks(
     String subjectId, {
-    int season = 1, 
-    int episode = 1, 
+    int? season, 
+    int? episode, 
     String? detailPath,
     String quality = "best",
     String language = "en",
+    bool isSeries = true,
   }) async {
     try {
-      print('Fetching download for subjectId: $subjectId, se: $season, ep: $episode');
+      final int se = isSeries ? (season ?? 1) : 0;
+      final int ep = isSeries ? (episode ?? 1) : 0;
+      
+      print('Fetching download for subjectId: $subjectId, se: $se, ep: $ep');
       const String path = '/wefeed-h5-bff/web/subject/download';
       
       final options = Options(headers: {
@@ -316,8 +320,8 @@ class MovieboxApi {
       
       final response = await _dio.get(path, queryParameters: {
         'subjectId': subjectId,
-        'se': season,
-        'ep': episode,
+        'se': se,
+        'ep': ep,
       }, options: options);
 
       if (response.statusCode == 200 && response.data != null) {
@@ -413,10 +417,11 @@ class MovieboxApi {
   /// [language] - Preferred language code (default: "en")
   Future<SubtitleInfo?> getSubtitle(
     String subjectId, {
-    int season = 1, 
-    int episode = 1, 
+    int? season, 
+    int? episode, 
     String? detailPath,
     String language = "en",
+    bool isSeries = true,
   }) async {
     final downloadInfo = await getDownloadLinks(
       subjectId,
@@ -424,6 +429,7 @@ class MovieboxApi {
       episode: episode,
       detailPath: detailPath,
       language: language,
+      isSeries: isSeries,
     );
     return downloadInfo?.subtitle;
   }
