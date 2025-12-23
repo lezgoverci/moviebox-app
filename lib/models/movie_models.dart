@@ -205,8 +205,16 @@ class HomeItem {
       cover: cover,
       url: url,
       detailPath: detailPath,
-      type: data['subjectType'] as int?,
+      type: _toInt(data['subjectType'] ?? data['domainType']),
     );
+  }
+
+  static int? _toInt(dynamic val) {
+    if (val == null) return null;
+    if (val is int) return val;
+    if (val is String) return int.tryParse(val);
+    if (val is double) return val.toInt();
+    return null;
   }
 
   String get routerPath {
@@ -282,8 +290,13 @@ class MovieDetail {
   final String? primaryStreamUrl; // Direct streaming link if available
   final Map<String, dynamic> rawResource; // Contains streaming links
   final String? detailPath; // URL slug for streaming API Referer
+  final int? subjectType; // 1 = Movie, 2 = Series
 
-  bool get isSeries => seasons.isNotEmpty;
+  // A series is explicitly type 2, or type is unknown and it has seasons
+  bool get isSeries => subjectType == 2 || (subjectType == null && seasons.isNotEmpty);
+  
+  // A movie is explicitly type 1, or type is unknown and it has no seasons
+  bool get isMovie => subjectType == 1 || (subjectType == null && seasons.isEmpty);
 
   MovieDetail({
     required this.id,
@@ -298,6 +311,7 @@ class MovieDetail {
     this.primaryStreamUrl,
     required this.rawResource,
     this.detailPath,
+    this.subjectType,
   });
 
   factory MovieDetail.fromJson(Map<String, dynamic> json) {
@@ -385,8 +399,9 @@ class MovieDetail {
       cast: stars.whereType<Map<String, dynamic>>().map((e) => CastMember.fromJson(e)).toList(),
       seasons: seasonList,
       primaryStreamUrl: streamUrl,
-      rawResource: resource.cast<String, dynamic>(),
+      rawResource: Map<String, dynamic>.from(json),
       detailPath: detailPath,
+      subjectType: HomeItem._toInt(subject['subjectType'] ?? subject['domainType']),
     );
   }
 }

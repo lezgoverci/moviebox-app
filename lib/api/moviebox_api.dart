@@ -162,13 +162,18 @@ class MovieboxApi {
   /// [quality] - Quality preference: "best", "worst", "720", "1080"
   Future<String?> getStreamingLink(
     String subjectId, {
-    int season = 1, 
-    int episode = 1, 
+    int? season, 
+    int? episode, 
     String? detailPath,
     String quality = "best",
+    bool isSeries = true,
   }) async {
     try {
-      print('Fetching stream for subjectId: $subjectId, se: $season, ep: $episode, detailPath: $detailPath');
+      // For movies (not series), season and episode must be 0
+      final int se = isSeries ? (season ?? 1) : 0;
+      final int ep = isSeries ? (episode ?? 1) : 0;
+      
+      print('Fetching stream for subjectId: $subjectId, se: $se, ep: $ep, detailPath: $detailPath');
       const String path = '/wefeed-h5-bff/web/subject/play';
       
       // Build custom headers with detailPath for correct Referer
@@ -178,8 +183,8 @@ class MovieboxApi {
       
       final response = await _dio.get(path, queryParameters: {
         'subjectId': subjectId,
-        'se': season,
-        'ep': episode,
+        'se': se,
+        'ep': ep,
       }, options: options);
 
       if (response.statusCode == 200 && response.data != null) {

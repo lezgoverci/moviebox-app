@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<HomeSection>? _sections;
   bool _loading = true;
+  int _selectedIndex = 1; // Default to Home (index 1)
 
   @override
   void initState() {
@@ -63,13 +64,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Container(
                     width: 80,
                     color: Theme.of(context).colorScheme.surface,
-                    child: Column(
+                    child: SingleChildScrollView(
+                      child: Column(
                         children: [
                             const SizedBox(height: 32),
                             const Icon(Icons.movie, size: 32),
                             const SizedBox(height: 32),
                             _NavButton(
                                 icon: Icons.search,
+                                selected: _selectedIndex == 0,
                                 onPressed: () {
                                     Navigator.of(context).push(
                                         MaterialPageRoute(builder: (_) => const SearchScreen())
@@ -77,12 +80,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                 },
                             ),
                             const SizedBox(height: 16),
-                            _NavButton(icon: Icons.home, autofocus: true, onPressed: () {}),
+                            _NavButton(
+                              icon: Icons.home, 
+                              autofocus: true, 
+                              selected: _selectedIndex == 1,
+                              onPressed: () => setState(() => _selectedIndex = 1),
+                            ),
                             const SizedBox(height: 16),
-                            _NavButton(icon: Icons.tv, onPressed: () {}),
+                            _NavButton(
+                              icon: Icons.movie_outlined, 
+                              selected: _selectedIndex == 2,
+                              onPressed: () => setState(() => _selectedIndex = 2),
+                            ),
                             const SizedBox(height: 16),
-                            _NavButton(icon: Icons.person, onPressed: () {}),
+                            _NavButton(
+                              icon: Icons.tv, 
+                              selected: _selectedIndex == 3,
+                              onPressed: () => setState(() => _selectedIndex = 3),
+                            ),
+                            const SizedBox(height: 16),
+                            _NavButton(
+                              icon: Icons.person, 
+                              selected: _selectedIndex == 4,
+                              onPressed: () => setState(() => _selectedIndex = 4),
+                            ),
+                            const SizedBox(height: 32),
                         ],
+                      ),
                     ),
                 ),
               ),
@@ -112,52 +136,76 @@ class _HomeScreenState extends State<HomeScreen> {
         widgets.add(const Center(child: Text("No content available", style: TextStyle(color: Colors.grey))));
         return widgets;
     }
+
+    String pageTitle = "HOME";
+    if (_selectedIndex == 2) pageTitle = "MOVIES";
+    if (_selectedIndex == 3) pageTitle = "TV SERIES";
+    if (_selectedIndex == 4) pageTitle = "MY PROFILE";
+
+    widgets.add(Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Text(pageTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 2)),
+    ));
     
     for (final section in _sections!) {
+        // Filter items based on selected category
+        List<HomeItem> filteredItems = section.items;
+        if (_selectedIndex == 2) {
+          // Movies (subjectType 1)
+          filteredItems = section.items.where((it) => it.type == 1).toList();
+        } else if (_selectedIndex == 3) {
+          // TV Series (subjectType 2)
+          filteredItems = section.items.where((it) => it.type == 2).toList();
+        }
+
+        if (filteredItems.isEmpty && _selectedIndex != 1) continue;
+
         final isBanner = section.type == 'BANNER';
         final sectionTitle = section.title.isNotEmpty ? section.title : section.type;
         
-        if (isBanner) {
-            widgets.add(Text("Featured", style: Theme.of(context).textTheme.headlineMedium));
-        } else {
-            widgets.add(Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge));
-        }
-        
+        widgets.add(Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white70)));
         widgets.add(const SizedBox(height: 16));
         
-                        widgets.add(
-                            SizedBox(
-                                height: 360,
-                                child: ListView.builder(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: isBanner && section.items.length > 5 ? 5 : section.items.length,
-                                    itemBuilder: (context, index) {
-                                        final item = section.items[index];
-                                        
-                                        return Padding(
-                                            padding: const EdgeInsets.only(right: 16),
-                                            child: TVCard(
-                                                cover: item.cover,
-                                                title: item.title,
-                                                width: isBanner ? 200 : 140,
-                                                onSelect: () {
-                                                    final path = item.routerPath;
-                                                    if (path.isNotEmpty) {
-                                                        Navigator.of(context).push(
-                                                            MaterialPageRoute(
-                                                                builder: (_) => DetailsScreen(url: path),
-                                                            ),
-                                                        );
-                                                    }
-                                                },
+        widgets.add(
+            SizedBox(
+                height: isBanner ? 380 : 340,
+                child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: filteredItems.length,
+                    itemBuilder: (context, index) {
+                        final item = filteredItems[index];
+                        
+                        return Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: TVCard(
+                                cover: item.cover,
+                                title: item.title,
+                                width: isBanner ? 220 : 160,
+                                onSelect: () {
+                                    final path = item.routerPath;
+                                    if (path.isNotEmpty) {
+                                        Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                                builder: (_) => DetailsScreen(url: path),
                                             ),
                                         );
-                                    },
-                                ),
+                                    }
+                                },
                             ),
                         );
-        widgets.add(SizedBox(height: isBanner ? 32 : 24));
+                    },
+                ),
+            ),
+        );
+        widgets.add(SizedBox(height: 32));
+    }
+
+    if (widgets.length == 1 && _selectedIndex != 1) {
+       widgets.add(const Center(child: Padding(
+         padding: EdgeInsets.all(40.0),
+         child: Text("No items found in this category", style: TextStyle(color: Colors.grey, fontSize: 18)),
+       )));
     }
     
     return widgets;
@@ -285,11 +333,13 @@ class _NavButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final bool autofocus;
+  final bool selected;
 
   const _NavButton({
     required this.icon,
     required this.onPressed,
     this.autofocus = false,
+    this.selected = false,
   });
 
   @override
@@ -325,13 +375,13 @@ class _NavButtonState extends State<_NavButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _focused ? Colors.white.withOpacity(0.2) : Colors.transparent,
+            color: widget.selected ? Colors.red.withOpacity(0.8) : (_focused ? Colors.white.withOpacity(0.2) : Colors.transparent),
             borderRadius: BorderRadius.circular(8),
-            border: _focused ? Border.all(color: Colors.white, width: 2) : null,
+            border: _focused ? Border.all(color: Colors.white, width: 2) : (widget.selected ? Border.all(color: Colors.red, width: 1) : null),
           ),
           child: Icon(
             widget.icon,
-            color: _focused ? Colors.white : Colors.grey,
+            color: (widget.selected || _focused) ? Colors.white : Colors.grey,
             size: 28,
           ),
         ),

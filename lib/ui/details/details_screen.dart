@@ -51,11 +51,13 @@ class _DetailsScreenState extends State<DetailsScreen> {
     setState(() => _loading = true);
     try {
       final api = context.read<MovieboxApi>();
+      print('DEBUG: Playing video. isSeries: ${_detail!.isSeries}, subjectType: ${_detail!.subjectType}, episodeId: $episodeId');
       final streamUrl = await api.getStreamingLink(
-      _detail!.id, 
-      episode: (episodeId != null) ? int.parse(episodeId) : 1,
-      detailPath: _detail!.detailPath,
-    );
+        _detail!.id,
+        episode: (episodeId != null) ? int.parse(episodeId) : 1,
+        detailPath: _detail!.detailPath,
+        isSeries: _detail!.isSeries,
+      );
       
       if (mounted) {
         setState(() => _loading = false);
