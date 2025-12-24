@@ -112,43 +112,83 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showSubtitlePicker() {
+    // Cancel the hide timer while dialog is open
+    _hideTimer?.cancel();
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.black87,
-        title: const Text("Select Subtitles", style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: 300,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: widget.subtitles.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return _TVListTile(
-                  title: "None",
-                  isSelected: _currentSubtitle == null,
-                  onTap: () {
-                    player.setSubtitleTrack(SubtitleTrack.no());
-                    setState(() => _currentSubtitle = null);
-                    Navigator.pop(context);
-                  },
-                );
-              }
-              final sub = widget.subtitles[index - 1];
-              return _TVListTile(
-                title: sub.languageName,
-                isSelected: _currentSubtitle?.id == sub.id,
-                onTap: () {
-                  player.setSubtitleTrack(SubtitleTrack.uri(sub.url, title: sub.languageName));
-                  setState(() => _currentSubtitle = sub);
-                  Navigator.pop(context);
-                },
-              );
-            },
+      builder: (dialogContext) => Shortcuts(
+        shortcuts: <LogicalKeySet, Intent>{
+          LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+          LogicalKeySet(LogicalKeyboardKey.arrowUp): const DirectionalFocusIntent(TraversalDirection.up),
+          LogicalKeySet(LogicalKeyboardKey.arrowDown): const DirectionalFocusIntent(TraversalDirection.down),
+          LogicalKeySet(LogicalKeyboardKey.escape): const DismissIntent(),
+          LogicalKeySet(LogicalKeyboardKey.goBack): const DismissIntent(),
+        },
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            DismissIntent: CallbackAction<DismissIntent>(
+              onInvoke: (_) {
+                Navigator.of(dialogContext).pop();
+                return null;
+              },
+            ),
+          },
+          child: FocusScope(
+            autofocus: true,
+            child: AlertDialog(
+              backgroundColor: Colors.black87,
+              title: const Text("Select Subtitles", style: TextStyle(color: Colors.white)),
+              content: SizedBox(
+                width: 300,
+                height: 400,
+                child: FocusTraversalGroup(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: widget.subtitles.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return _TVListTile(
+                          title: "None",
+                          isSelected: _currentSubtitle == null,
+                          autofocus: true,
+                          onTap: () {
+                            player.setSubtitleTrack(SubtitleTrack.no());
+                            setState(() => _currentSubtitle = null);
+                            Navigator.pop(dialogContext);
+                          },
+                        );
+                      }
+                      final sub = widget.subtitles[index - 1];
+                      return _TVListTile(
+                        title: sub.languageName,
+                        isSelected: _currentSubtitle?.id == sub.id,
+                        onTap: () {
+                          player.setSubtitleTrack(SubtitleTrack.uri(sub.url, title: sub.languageName));
+                          setState(() => _currentSubtitle = sub);
+                          Navigator.pop(dialogContext);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
-    );
+    ).then((_) {
+      // Reclaim focus after dialog closes
+      if (mounted) {
+        if (_showControls) {
+          _playPauseNode.requestFocus();
+          _startHideTimer();
+        } else {
+          _mainFocusNode.requestFocus();
+        }
+      }
+    });
   }
 
 
@@ -186,14 +226,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
               LogicalKeySet(LogicalKeyboardKey.arrowLeft): const DirectionalFocusIntent(TraversalDirection.left),
               LogicalKeySet(LogicalKeyboardKey.arrowRight): const DirectionalFocusIntent(TraversalDirection.right),
               LogicalKeySet(LogicalKeyboardKey.escape): const DismissIntent(),
-              LogicalKeySet(LogicalKeyboardKey.backspace): const DismissIntent(),
+              LogicalKeySet(LogicalKeyboardKey.goBack): const DismissIntent(),
             },
             child: Actions(
               actions: <Type, Action<Intent>>{
                 DismissIntent: CallbackAction<DismissIntent>(
                   onInvoke: (_) {
                     if (_showControls) {
-                      _toggleControls(); // Use the logic that reclaimed focus
+                      _toggleControls(); // Hide controls on back button
                       return null;
                     }
                     Navigator.of(context).pop();
@@ -209,6 +249,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     return null; // Let the focused widget handle it
                   },
                 ),
+                DirectionalFocusIntent: CallbackAction<DirectionalFocusIntent>(
+                  onInvoke: (intent) {
+                    // Reset timer on D-pad navigation
+                    if (_showControls) {
+                      _startHideTimer();
+                    }
+                    // Let the default focus traversal happen
+                    return Actions.maybeInvoke(context, intent);
+                  },
+                ),
               },
               child: FocusScope(
                 autofocus: true,
@@ -216,8 +266,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   focusNode: _mainFocusNode,
                   autofocus: true,
                   onKeyEvent: (node, event) {
-                    // Consume all key events to prevent them from bubbling up
-                    // The actual handling is done by the Shortcuts widget above
+                    // Reset the hide timer on any key activity when controls are shown
+                    if (_showControls && event is KeyDownEvent) {
+                      _startHideTimer();
+                    }
                     return KeyEventResult.ignored;
                   },
                   child: Stack(
@@ -424,11 +476,13 @@ class _TVListTile extends StatefulWidget {
   final String title;
   final bool isSelected;
   final VoidCallback onTap;
+  final bool autofocus;
 
   const _TVListTile({
     required this.title,
     required this.isSelected,
     required this.onTap,
+    this.autofocus = false,
   });
 
   @override
@@ -441,6 +495,7 @@ class _TVListTileState extends State<_TVListTile> {
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
+      autofocus: widget.autofocus,
       onFocusChange: (f) => setState(() => _focused = f),
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
