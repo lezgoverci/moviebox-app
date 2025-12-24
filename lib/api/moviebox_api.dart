@@ -17,7 +17,7 @@ class MovieboxApi {
     defaultValue: 'http://192.168.1.7:8000',
   ); 
   static const String appInfopath = '/wefeed-h5-bff/app/get-latest-app-pkgs?app_name=moviebox';
-  static const String searchSuggestPath = '/wefeed-h5-bff/web/subject/search-suggest';
+  static const String searchPath = '/wefeed-h5-bff/web/subject/search';
   
   late Dio _dio;
   late PersistCookieJar _cookieJar;
@@ -104,13 +104,16 @@ class MovieboxApi {
 
   Future<List<SearchResultItem>> search(String query) async {
     try {
-      final response = await _dio.post(searchSuggestPath, data: {
+      final response = await _dio.post(searchPath, data: {
         "per_page": 20,
         "keyword": query,
       });
 
       if (response.data != null && response.data['data'] != null) {
-        final List list = response.data['data']['search_suggest_list'] ?? [];
+        final data = response.data['data'];
+        // Full search usually returns a list of items directly in 'items' or similar
+        // Based on probe: {"data": {"items": [...]}}
+        final List list = data['items'] ?? [];
         return list.map((e) => SearchResultItem.fromJson(e)).toList();
       }
     } catch (e) {
@@ -121,6 +124,9 @@ class MovieboxApi {
 
   Future<MovieDetail?> getDetails(String urlPath) async {
     try {
+      if (!urlPath.startsWith('/')) {
+        urlPath = '/$urlPath';
+      }
       print('Fetching details for: $urlPath');
       final response = await _dio.get(urlPath);
       print('Response status: ${response.statusCode}');
@@ -176,19 +182,82 @@ class MovieboxApi {
         return resolved;
       }
 
-      // Search exhaustive for resData
+      // Scan the entire pool for the best candidate
+      Map<String, dynamic>? bestCandidate;
+      int bestScore = -1;
+
       for (int i = 0; i < pool.length; i++) {
         final item = pool[i];
-        if (item is Map && (item.containsKey('metadata') || item.containsKey('subject') || item.containsKey('resource') || item.containsKey('resData') || item.containsKey('\$sresData'))) {
-           final resolved = resolve(i, {});
-           if (resolved is Map) {
-             final data = resolved.containsKey('metadata') ? resolved : (resolved['resData'] ?? resolved['\$sresData']);
-             if (data is Map && data.containsKey('metadata')) {
-               print("Successfully found resData at index $i");
-               return MovieDetail.fromJson(Map<String, dynamic>.from(data));
+        if (item is Map) {
+             // We attempt to resolve every map to see if it's our target
+             final resolved = resolve(i, {});
+             if (resolved is! Map) continue;
+             
+             // Check potential candidates
+             List<dynamic> candidates = [resolved];
+             if (resolved.containsKey('metadata')) candidates.add(resolved['metadata']);
+             if (resolved.containsKey('resData')) candidates.add(resolved['resData']);
+             if (resolved.containsKey('\$sresData')) candidates.add(resolved['\$sresData']);
+             if (resolved.containsKey('subject')) candidates.add(resolved['subject']);
+
+             for (final candidate in candidates) {
+                if (candidate is Map) {
+                   // Duck typing for MovieDetail
+                   // Essential requirements (check top level OR nested subject/metadata)
+                   bool hasId = candidate.containsKey('id') || candidate.containsKey('subjectId');
+                   bool hasTitle = candidate.containsKey('title');
+                   
+                   // Check nested 'subject' or 'metadata' if top level is missing
+                   if (!hasId || !hasTitle) {
+                       final subject = candidate['subject'];
+                       if (subject is Map) {
+                           if (!hasId) hasId = subject.containsKey('id') || subject.containsKey('subjectId');
+                           if (!hasTitle) hasTitle = subject.containsKey('title');
+                       }
+                   }
+                   if (!hasId || !hasTitle) {
+                       final metadata = candidate['metadata'];
+                       if (metadata is Map) {
+                           if (!hasId) hasId = metadata.containsKey('id') || metadata.containsKey('subjectId');
+                           if (!hasTitle) hasTitle = metadata.containsKey('title');
+                       }
+                   }
+
+                   if (!hasId) continue;
+                   if (!hasTitle) continue;
+
+                   int score = 0;
+                   // Essential fields
+                   if (candidate.containsKey('detailPath')) score += 10;
+                   if (candidate.containsKey('cover') || candidate.containsKey('poster')) score += 5;
+                   
+                   // High value fields that distinguish "full" details from "lite"/preview objects
+                   if (candidate.containsKey('subtitles') && candidate['subtitles'] != null) score += 50;
+                   if (candidate.containsKey('resources') || candidate.containsKey('items') || candidate.containsKey('seasons')) score += 50;
+                   
+                   // Important: If this is a wrapper with 'resource', it's very valuable
+                   if (candidate.containsKey('resource')) score += 100;
+
+                   if (candidate.containsKey('staffList') || candidate.containsKey('casts')) score += 20;
+                   if (candidate.containsKey('trailer')) score += 10;
+                   if (candidate.containsKey('description') && (candidate['description'] as String?)?.isNotEmpty == true) score += 5;
+
+                   if (score > bestScore) {
+                      bestScore = score;
+                      bestCandidate = Map<String, dynamic>.from(candidate);
+                   }
+                }
              }
-           }
         }
+      }
+
+      if (bestCandidate != null) {
+         try {
+            print("Successfully parsed detail object (Score: $bestScore)");
+            return MovieDetail.fromJson(bestCandidate);
+         } catch (e) {
+            print("Error instantiating best candidate: $e");
+         }
       }
       
       print("Parse Error: Detail object not found in pool");

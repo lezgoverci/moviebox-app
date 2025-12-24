@@ -69,7 +69,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   padding: const EdgeInsets.all(16),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 5, // TV Grid
-                      childAspectRatio: 0.7,
+                      childAspectRatio: 0.55, // Adjusted to prevent overflow (more height)
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
                   ),
@@ -80,9 +80,15 @@ class _SearchScreenState extends State<SearchScreen> {
                           cover: item.cover, 
                           title: item.title,
                           onSelect: () {
-                               Navigator.of(context).push(
-                                   MaterialPageRoute(builder: (_) => DetailsScreen(url: item.pageUrl))
-                               );
+                              if (item.pageUrl.isNotEmpty) {
+                                   Navigator.of(context).push(
+                                       MaterialPageRoute(builder: (_) => DetailsScreen(url: item.pageUrl))
+                                   );
+                              } else {
+                                  // Use as suggestion
+                                  _controller.text = item.title;
+                                  _doSearch(item.title);
+                              }
                           },
                       );
                   },

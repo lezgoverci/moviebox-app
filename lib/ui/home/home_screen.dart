@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:moviebox_app/api/moviebox_api.dart';
 import 'package:moviebox_app/models/movie_models.dart';
 import 'package:moviebox_app/ui/details/details_screen.dart';
+import 'package:moviebox_app/ui/home/hero_banner.dart';
 import 'package:moviebox_app/ui/search/search_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -68,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         children: [
                             const SizedBox(height: 32),
-                            const Icon(Icons.movie, size: 32),
+                            const Icon(Icons.movie, size: 32, color: Color(0xFFE50914)),
                             const SizedBox(height: 32),
                             _NavButton(
                                 icon: Icons.search,
@@ -97,12 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               icon: Icons.tv, 
                               selected: _selectedIndex == 3,
                               onPressed: () => setState(() => _selectedIndex = 3),
-                            ),
-                            const SizedBox(height: 16),
-                            _NavButton(
-                              icon: Icons.person, 
-                              selected: _selectedIndex == 4,
-                              onPressed: () => setState(() => _selectedIndex = 4),
                             ),
                             const SizedBox(height: 32),
                         ],
@@ -137,15 +132,43 @@ class _HomeScreenState extends State<HomeScreen> {
         return widgets;
     }
 
-    String pageTitle = "HOME";
-    if (_selectedIndex == 2) pageTitle = "MOVIES";
-    if (_selectedIndex == 3) pageTitle = "TV SERIES";
-    if (_selectedIndex == 4) pageTitle = "MY PROFILE";
-
-    widgets.add(Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Text(pageTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 2)),
-    ));
+    // Hero Banner Logic
+    if (_selectedIndex == 1) { // Only on "HOME" tab
+      final bannerSection = _sections!.firstWhere((s) => s.type == "BANNER", orElse: () => _sections!.first);
+      if (bannerSection.items.isNotEmpty) {
+        final heroItem = bannerSection.items.first;
+        widgets.add(HeroBanner(
+          item: heroItem,
+          onPlay: () {
+             final path = heroItem.routerPath;
+             if (path.isNotEmpty) {
+                 Navigator.of(context).push(
+                     MaterialPageRoute(builder: (_) => DetailsScreen(url: path, autoPlay: true)) // Assumes autoPlay param
+                 );
+             }
+          },
+          onInfo: () {
+             final path = heroItem.routerPath;
+             if (path.isNotEmpty) {
+                Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => DetailsScreen(url: path))
+                );
+             }
+          },
+        ));
+        // Add negative margin to pull the lists up a bit if needed, or just standard spacing
+        widgets.add(const SizedBox(height: 24));
+      }
+    } else {
+        String pageTitle = "HOME";
+        if (_selectedIndex == 2) pageTitle = "MOVIES";
+        if (_selectedIndex == 3) pageTitle = "TV SERIES";
+        
+        widgets.add(Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          child: Text(pageTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 2)),
+        ));
+    }
     
     for (final section in _sections!) {
         // Filter items based on selected category
@@ -159,18 +182,24 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         if (filteredItems.isEmpty && _selectedIndex != 1) continue;
-
-        final isBanner = section.type == 'BANNER';
-        final sectionTitle = section.title.isNotEmpty ? section.title : section.type;
         
-        widgets.add(Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white70)));
-        widgets.add(const SizedBox(height: 16));
+        // Skip Banner section if we are on Home (since we showed Hero)
+        // Actually, we might want to show the REST of banner items?
+        // Let's just show them as a "Featured" list
+        
+        final sectionTitle = section.type == 'BANNER' ? "Featured" : (section.title.isNotEmpty ? section.title : section.type);
+        
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(sectionTitle.toUpperCase(), style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+        ));
+        widgets.add(const SizedBox(height: 12));
         
         widgets.add(
             SizedBox(
-                height: isBanner ? 380 : 340,
+                height: 240, // Reduced height for standard rows (Portrait cards)
                 child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     scrollDirection: Axis.horizontal,
                     itemCount: filteredItems.length,
                     itemBuilder: (context, index) {
@@ -180,8 +209,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.only(right: 16),
                             child: TVCard(
                                 cover: item.cover,
-                                title: item.title,
-                                width: isBanner ? 220 : 160,
+                                title: item.title, // Title shown below or on focus
+                                width: 150, // Standard poster width
                                 onSelect: () {
                                     final path = item.routerPath;
                                     if (path.isNotEmpty) {
@@ -198,10 +227,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ),
         );
-        widgets.add(SizedBox(height: 32));
+        widgets.add(const SizedBox(height: 32));
     }
 
-    if (widgets.length == 1 && _selectedIndex != 1) {
+    if (widgets.length <= 2 && _selectedIndex != 1) { // 2 because title + spacer might be there
        widgets.add(const Center(child: Padding(
          padding: EdgeInsets.all(40.0),
          child: Text("No items found in this category", style: TextStyle(color: Colors.grey, fontSize: 18)),
@@ -267,11 +296,12 @@ class _TVCardState extends State<TVCard> {
         child: GestureDetector(
             onTap: _handleSelect,
             child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: const Duration(milliseconds: 200),
                 width: widget.width,
+                transform: _focused ? Matrix4.identity().scaled(1.1) : Matrix4.identity(),
                 decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: _focused ? Border.all(color: Colors.white, width: 3) : Border.all(color: Colors.transparent, width: 3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: _focused ? Border.all(color: Colors.white, width: 2) : Border.all(color: Colors.transparent, width: 2),
                     boxShadow: _focused ? [
                         BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 8))
                     ] : [],
@@ -281,7 +311,7 @@ class _TVCardState extends State<TVCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                         ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(6),
                             child: AspectRatio(
                                 aspectRatio: 2/3,
                                 child: widget.cover != null && widget.cover!.isNotEmpty
@@ -289,8 +319,7 @@ class _TVCardState extends State<TVCard> {
                                        imageUrl: widget.cover!,
                                        fit: BoxFit.cover,
                                        width: double.infinity,
-                                       // Memory optimization: cache images at the size they are displayed
-                                       memCacheWidth: (widget.width * MediaQuery.of(context).devicePixelRatio).round(),
+                                       memCacheWidth: (widget.width * 1.5 * MediaQuery.of(context).devicePixelRatio).round(), // Cache slightly larger for zoom
                                        fadeInDuration: const Duration(milliseconds: 200),
                                        httpHeaders: const {
                                          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -298,28 +327,48 @@ class _TVCardState extends State<TVCard> {
                                        },
                                        placeholder: (context, url) => Container(
                                            color: Colors.grey[900],
-                                           child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
                                        ),
-                                       errorWidget: (_,__,___) => Container(color: Colors.grey[800], child: const Icon(Icons.error)),
+                                       errorWidget: (_,__,___) => Container(
+                                         color: Colors.grey[800], 
+                                         child: Center(child: Icon(Icons.movie, size: 40, color: Colors.white24))
+                                       ),
                                    )
-                                 : Container(color: Colors.grey[800], child: const Icon(Icons.movie, size: 40)),
+                                 : Container(
+                                     color: Colors.grey[800], 
+                                     child: Center(
+                                       child: Padding(
+                                         padding: const EdgeInsets.all(8.0),
+                                         child: Text(
+                                           widget.title ?? "",
+                                           textAlign: TextAlign.center,
+                                           style: TextStyle(color: Colors.white54, fontSize: 10),
+                                           maxLines: 4,
+                                           overflow: TextOverflow.ellipsis,
+                                         ),
+                                       )
+                                     )
+                                   ),
                             ),
                         ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                              widget.title ?? "Unknown",
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color: _focused ? Colors.white : Colors.grey[400],
-                                  fontWeight: _focused ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 12,
-                              ),
+                        // Only show title if focused
+                        if (_focused) ...[
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                                widget.title ?? "Unknown",
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                                ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
+                        ]
                     ],
                 ),
             ),

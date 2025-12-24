@@ -8,7 +8,8 @@ import 'package:provider/provider.dart';
 
 class DetailsScreen extends StatefulWidget {
   final String url;
-  const DetailsScreen({super.key, required this.url});
+  final bool autoPlay;
+  const DetailsScreen({super.key, required this.url, this.autoPlay = false});
 
   @override
   State<DetailsScreen> createState() => _DetailsScreenState();
@@ -48,6 +49,12 @@ class _DetailsScreenState extends State<DetailsScreen> {
               _selectedSubtitle = _subtitles.firstWhere((s) => s.languageCode == 'en', orElse: () => _subtitles.first);
             }
             _loading = false;
+            
+            if (widget.autoPlay) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                 if (mounted) _playVideo();
+              });
+            }
           });
         }
       }

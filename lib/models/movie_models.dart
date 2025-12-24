@@ -14,12 +14,43 @@ class SearchResultItem {
   });
 
   factory SearchResultItem.fromJson(Map<String, dynamic> json) {
+    // Check for 'subject' wrapper often found in autocomplete response
+    final subject = json['subject'] is Map ? json['subject'] as Map<String, dynamic> : null;
+    final Map<String, dynamic> data = subject ?? json;
+
+    String title = data['title'] ?? data['name'] ?? '';
+    // Fallback for autocomplete "word"
+    if (title.isEmpty) {
+        title = json['word'] ?? '';
+    }
+
+    // Cover
+    dynamic imageRaw = data['cover'] ?? data['image'];
+    String cover = '';
+    if (imageRaw is String) {
+        cover = imageRaw;
+    } else if (imageRaw is Map) {
+        cover = imageRaw['url'] ?? '';
+    }
+
+    String? url = data['url'];
+    String detailPath = data['detailPath'] ?? '';
+    
+    // Ensure we have a valid pageUrl
+    String pageUrl = '';
+    if (url != null && url.isNotEmpty) {
+       pageUrl = url;
+    } else if (detailPath.isNotEmpty) {
+       // Construct local router path
+       pageUrl = '/detail/$detailPath';
+    }
+
     return SearchResultItem(
-      id: json['id']?.toString() ?? '',
-      title: json['title'] ?? '',
-      cover: json['cover'] ?? '',
-      pageUrl: json['url'] ?? '', // API usually returns 'url' which is relative
-      subjectType: HomeItem._toInt(json['domainType']) ?? 0,
+      id: data['id']?.toString() ?? data['subjectId']?.toString() ?? '',
+      title: title,
+      cover: cover,
+      pageUrl: pageUrl,
+      subjectType: HomeItem._toInt(data['domainType'] ?? data['subjectType']) ?? 0,
     );
   }
 }
@@ -316,10 +347,30 @@ class MovieDetail {
 
   factory MovieDetail.fromJson(Map<String, dynamic> json) {
     // Note: This expects the "Resolved" JSON object (resData)
-    final metadata = (json['metadata'] is Map) ? json['metadata'] as Map<String, dynamic> : {};
-    final subject = (json['subject'] is Map) ? json['subject'] as Map<String, dynamic> : {};
-    final stars = (json['stars'] is List) ? json['stars'] as List : [];
-    final resource = (json['resource'] is Map) ? json['resource'] as Map<String, dynamic> : {};
+    // Note: This expects the "Resolved" JSON object (resData)
+    var metadata = (json['metadata'] is Map) ? json['metadata'] as Map<String, dynamic> : <String, dynamic>{};
+    var subject = (json['subject'] is Map) ? json['subject'] as Map<String, dynamic> : <String, dynamic>{};
+    
+    // Support flat structure (unwrapped) from deep resolution
+    if (metadata.isEmpty && subject.isEmpty) {
+        if (json.containsKey('subjectId') || json.containsKey('id')) {
+            subject = json;
+            metadata = json;
+        }
+    }
+
+    var stars = (json['stars'] is List) ? json['stars'] as List : [];
+    if (stars.isEmpty && json['staffList'] is List) {
+        stars = json['staffList'] as List;
+    }
+
+    var resource = (json['resource'] is Map) ? json['resource'] as Map<String, dynamic> : <String, dynamic>{};
+    if (resource.isEmpty) {
+       // Fallback to checking root if resource object is not explicit
+       if (json.containsKey('seasons') || json.containsKey('items') || json.containsKey('videoAddress')) {
+          resource = json;
+       }
+    }
 
     List<Season> seasonList = [];
     String? streamUrl;
