@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:moviebox_app/api/moviebox_api.dart';
 import 'package:moviebox_app/ui/home/home_screen.dart';
+import 'package:moviebox_app/ui/warmup/server_warmup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +60,9 @@ class MovieboxApp extends StatelessWidget {
         LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
         LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
       },
-      home: const HomeScreen(),
+      home: const ServerWarmupScreen(
+        child: HomeScreen(),
+      ),
     );
   }
 }
