@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:moviebox_app/api/moviebox_api.dart';
 import 'package:moviebox_app/models/movie_models.dart';
 import 'package:moviebox_app/ui/details/details_screen.dart'; // Circular dep handled by import
