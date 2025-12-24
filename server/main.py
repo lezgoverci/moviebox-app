@@ -16,6 +16,7 @@ from pydantic import BaseModel, HttpUrl
 import httpx
 from typing import Optional, List
 import json
+import gzip
 
 app = FastAPI(title="Moviebox Proxy Server")
 
@@ -199,8 +200,17 @@ async def proxy_api(path: str, request: Request):
             if key.lower() not in skip_headers:
                 filtered_headers[key] = value
         
+        # Decompress gzip content if needed
+        content = response.content
+        content_encoding = response.headers.get("content-encoding", "").lower()
+        if content_encoding == "gzip" and content[:2] == b'\x1f\x8b':
+            try:
+                content = gzip.decompress(content)
+            except Exception as e:
+                print(f"Failed to decompress gzip: {e}")
+        
         return Response(
-            content=response.content,
+            content=content,
             status_code=response.status_code,
             headers=filtered_headers,
             media_type=response.headers.get("content-type"),
@@ -244,8 +254,17 @@ async def proxy_html(path: str, request: Request):
             if key.lower() not in skip_headers:
                 filtered_headers[key] = value
         
+        # Decompress gzip content if needed
+        content = response.content
+        content_encoding = response.headers.get("content-encoding", "").lower()
+        if content_encoding == "gzip" and content[:2] == b'\x1f\x8b':
+            try:
+                content = gzip.decompress(content)
+            except Exception as e:
+                print(f"Failed to decompress gzip: {e}")
+        
         return Response(
-            content=response.content,
+            content=content,
             status_code=response.status_code,
             headers=filtered_headers,
             media_type=response.headers.get("content-type"),

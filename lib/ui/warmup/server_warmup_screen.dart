@@ -24,7 +24,7 @@ class _ServerWarmupScreenState extends State<ServerWarmupScreen>
   bool _isError = false;
   String _statusMessage = 'Connecting to server...';
   int _retryCount = 0;
-  static const int _maxRetries = 20; // ~60 seconds total (3s each)
+  static const int _maxRetries = 20; // 20 retries x 30s = ~10 minutes total
   
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -98,8 +98,8 @@ class _ServerWarmupScreenState extends State<ServerWarmupScreen>
           }
           return;
         }
-        // Wait before retry
-        await Future.delayed(const Duration(seconds: 3));
+        // Wait before retry (30 seconds to reduce load and allow 10 min total)
+        await Future.delayed(const Duration(seconds: 30));
       }
     }
   }
