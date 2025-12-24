@@ -32,12 +32,31 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  final FocusNode _searchFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _searchFocusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: TextField(
+        title: Focus(
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              // Move focus to the body (GridView)
+              FocusScope.of(context).nextFocus();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: TextField(
             controller: _controller,
+            focusNode: _searchFocusNode,
             decoration: const InputDecoration(
                 hintText: 'Search movies, series, anime...',
                 border: InputBorder.none,
@@ -45,9 +64,14 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             style: const TextStyle(color: Colors.white),
             cursorColor: Theme.of(context).primaryColor,
-            onSubmitted: _doSearch,
+            onSubmitted: (val) {
+                _doSearch(val);
+                // Move focus to results after search if results exist
+                // We'll let the user navigate down manually or auto-focus if needed
+            },
             textInputAction: TextInputAction.search,
             autofocus: true,
+          ),
         ),
         actions: [
             IconButton(
@@ -65,33 +89,35 @@ class _SearchScreenState extends State<SearchScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _results.isEmpty
               ? const Center(child: Text("Search for something to start streaming"))
-              : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5, // TV Grid
-                      childAspectRatio: 0.55, // Adjusted to prevent overflow (more height)
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                  ),
-                  itemCount: _results.length,
-                  itemBuilder: (context, index) {
-                      final item = _results[index];
-                      return TVCard(
-                          cover: item.cover, 
-                          title: item.title,
-                          onSelect: () {
-                              if (item.pageUrl.isNotEmpty) {
-                                   Navigator.of(context).push(
-                                       MaterialPageRoute(builder: (_) => DetailsScreen(url: item.pageUrl))
-                                   );
-                              } else {
-                                  // Use as suggestion
-                                  _controller.text = item.title;
-                                  _doSearch(item.title);
-                              }
-                          },
-                      );
-                  },
+              : FocusTraversalGroup(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 5, // TV Grid
+                        childAspectRatio: 0.55, // Adjusted to prevent overflow (more height)
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                    ),
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) {
+                        final item = _results[index];
+                        return TVCard(
+                            cover: item.cover, 
+                            title: item.title,
+                            onSelect: () {
+                                if (item.pageUrl.isNotEmpty) {
+                                     Navigator.of(context).push(
+                                         MaterialPageRoute(builder: (_) => DetailsScreen(url: item.pageUrl))
+                                     );
+                                } else {
+                                    // Use as suggestion
+                                    _controller.text = item.title;
+                                    _doSearch(item.title);
+                                }
+                            },
+                        );
+                    },
+                ),
               ),
     );
   }
