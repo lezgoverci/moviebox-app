@@ -102,12 +102,17 @@ class MovieboxApi {
     }
   }
 
-  Future<List<SearchResultItem>> search(String query) async {
+  Future<List<SearchResultItem>> search(String query, {int page = 1, int? type}) async {
     try {
-      final response = await _dio.post(searchPath, data: {
+      final data = {
         "per_page": 20,
         "keyword": query,
-      });
+        "page": page,
+      };
+      if (type != null) {
+        data["subject_type"] = type;
+      }
+      final response = await _dio.post(searchPath, data: data);
 
       if (response.data != null && response.data['data'] != null) {
         final data = response.data['data'];
@@ -564,6 +569,15 @@ class MovieboxApi {
           if (data is Map && data['data'] != null) {
               final operatingList = data['data']['operatingList'];
               if (operatingList is List) {
+                for (var op in operatingList) {
+                   if (op is Map) {
+                       print("DEBUG: Home Section Keys: ${op.keys}");
+                       if (op['more'] != null) print("DEBUG: Section has 'more': ${op['more']}");
+                       if (op['url'] != null) print("DEBUG: Section has 'url': ${op['url']}");
+                       // Check custom data
+                       if (op['customData'] != null) print("DEBUG: Section customData: ${op['customData']}");
+                   }
+                }
                 return operatingList
                     .map((e) => HomeSection.fromJson(e as Map<String, dynamic>))
                     .where((s) => s.items.isNotEmpty)
@@ -575,5 +589,103 @@ class MovieboxApi {
       print('Home content error: $e');
     }
     return [];
+  }
+
+  Future<List<HomeItem>> fetchSectionItems(String url, {int page = 1}) async {
+      try {
+          if (url.isEmpty) return [];
+          
+          // Ensure URL is relative or absolute correctly
+          String fetchUrl = url;
+          if (fetchUrl.startsWith('https://h5.aoneroom.com')) {
+              fetchUrl = fetchUrl.replaceAll('https://h5.aoneroom.com', '');
+          }
+          if (!fetchUrl.startsWith('/') && !fetchUrl.startsWith('http')) {
+              fetchUrl = '/$fetchUrl';
+          }
+          
+          print('Fetching section items from: $fetchUrl (Page $page)');
+          
+          final response = await _dio.get(fetchUrl, queryParameters: {'page': page});
+          
+          if (response.statusCode == 200) {
+              final html = response.data.toString();
+              return await compute(_parseSectionList, html);
+          }
+      } catch (e) {
+          print('Error fetching section items: $e');
+      }
+      return [];
+  }
+
+  static List<HomeItem> _parseSectionList(String html) {
+      try {
+        final document = doc_parser.parse(html);
+        var script = document.getElementById('__NUXT_DATA__');
+        
+        if (script == null) return [];
+
+        final List<dynamic> pool = jsonDecode(script.text);
+        final Map<int, dynamic> cache = {};
+
+        dynamic resolve(dynamic val, Set<int> visited) {
+          if (val is! int || val < 0 || val >= pool.length) return val;
+          if (cache.containsKey(val)) return cache[val];
+          if (visited.contains(val)) return null;
+
+          visited.add(val);
+          final raw = pool[val];
+          dynamic resolved;
+
+          if (raw is List) {
+            resolved = raw.map((e) => resolve(e, visited)).toList();
+          } else if (raw is Map) {
+            resolved = raw.map((k, v) => MapEntry(k.toString(), resolve(v, visited)));
+          } else {
+            resolved = raw;
+          }
+
+          visited.remove(val);
+          cache[val] = resolved;
+          return resolved;
+        }
+
+        List<HomeItem> bestList = [];
+        int bestScore = -1;
+
+        for (int i = 0; i < pool.length; i++) {
+          final resolved = resolve(i, {});
+          if (resolved is List) {
+               // Check if this list contains valid items
+               int score = 0;
+               List<HomeItem> currentList = [];
+               for (var item in resolved) {
+                   if (item is Map) {
+                       // Check if it looks like a HomeItem
+                       if ((item.containsKey('id') || item.containsKey('subjectId')) && item.containsKey('title')) {
+                           score++;
+                           try {
+                               currentList.add(HomeItem.fromJson(Map<String, dynamic>.from(item)));
+                           } catch (_) {}
+                       }
+                   }
+               }
+               
+               if (score > 5 && score > bestScore) { // Threshold to avoid small random lists
+                   bestScore = score;
+                   bestList = currentList;
+               }
+          }
+        }
+        
+        if (bestList.isNotEmpty) {
+            print("Found section list with ${bestList.length} items (Score: $bestScore)");
+            return bestList;
+        }
+
+      } catch (e) {
+         print("Error parsing section list: $e");
+      }
+      return [];
   }
 }

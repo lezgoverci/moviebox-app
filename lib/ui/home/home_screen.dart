@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:moviebox_app/api/moviebox_api.dart';
 import 'package:moviebox_app/models/movie_models.dart';
+import 'package:moviebox_app/ui/common/paged_horizontal_list.dart';
 import 'package:moviebox_app/ui/details/details_screen.dart';
 import 'package:moviebox_app/ui/home/hero_banner.dart';
 import 'package:moviebox_app/ui/search/search_screen.dart';
@@ -171,21 +172,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     for (final section in _sections!) {
-        // Filter items based on selected category
-        List<HomeItem> filteredItems = section.items;
+        // Filter items based on selected category (Movies vs Series tabs)
+        List<HomeItem> initialItems = section.items;
         if (_selectedIndex == 2) {
-          // Movies (subjectType 1)
-          filteredItems = section.items.where((it) => it.type == 1).toList();
+          initialItems = section.items.where((it) => it.type == 1).toList();
         } else if (_selectedIndex == 3) {
-          // TV Series (subjectType 2)
-          filteredItems = section.items.where((it) => it.type == 2).toList();
+          initialItems = section.items.where((it) => it.type == 2).toList();
         }
 
-        if (filteredItems.isEmpty && _selectedIndex != 1) continue;
-        
-        // Skip Banner section if we are on Home (since we showed Hero)
-        // Actually, we might want to show the REST of banner items?
-        // Let's just show them as a "Featured" list
+        if (initialItems.isEmpty && _selectedIndex != 1) continue;
         
         final sectionTitle = section.type == 'BANNER' ? "Featured" : (section.title.isNotEmpty ? section.title : section.type);
         
@@ -195,38 +190,83 @@ class _HomeScreenState extends State<HomeScreen> {
         ));
         widgets.add(const SizedBox(height: 12));
         
-        widgets.add(
-            SizedBox(
-                height: 240, // Reduced height for standard rows (Portrait cards)
-                child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: filteredItems.length,
-                    itemBuilder: (context, index) {
-                        final item = filteredItems[index];
-                        
-                        return Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: TVCard(
-                                cover: item.cover,
-                                title: item.title, // Title shown below or on focus
-                                width: 150, // Standard poster width
-                                onSelect: () {
-                                    final path = item.routerPath;
-                                    if (path.isNotEmpty) {
-                                        Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                                builder: (_) => DetailsScreen(url: path),
-                                            ),
-                                        );
-                                    }
-                                },
-                            ),
-                        );
-                    },
+        // If section has a URL, we can support pagination!
+        // For Movies/Series tabs, we might be filtering a mixed list, so pagination of the "Mixed" source 
+        // might return non-matching types which we'd filter out, resulting in empty pages.
+        // It's safer to only use pagination on Home tab OR if we are sure the section is pure.
+        // But let's try to apply it generally.
+        
+        if (section.url.isNotEmpty) {
+             widgets.add(PagedHorizontalList<HomeItem>(
+                 height: 280,
+                 fetchPage: (page) async {
+                     if (page == 1) return initialItems; // Use mostly-loaded first page
+                     
+                     // Fetch next page from API
+                     final api = context.read<MovieboxApi>();
+                     final newItems = await api.fetchSectionItems(section.url, page: page);
+                     
+                     // Filter if we are in a specific tab
+                     if (_selectedIndex == 2) return newItems.where((it) => it.type == 1).toList();
+                     if (_selectedIndex == 3) return newItems.where((it) => it.type == 2).toList();
+                     
+                     return newItems;
+                 },
+                 itemBuilder: (context, item) {
+                     return Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: TVCard(
+                            cover: item.cover,
+                            title: item.title,
+                            width: 150,
+                            onSelect: () {
+                                final path = item.routerPath;
+                                if (path.isNotEmpty) {
+                                    Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                            builder: (_) => DetailsScreen(url: path),
+                                        ),
+                                    );
+                                }
+                            },
+                        ),
+                    );
+                 },
+             ));
+        } else {
+            // Standard finite list for sections without URL
+            widgets.add(
+                SizedBox(
+                    height: 280,
+                    child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: initialItems.length,
+                        itemBuilder: (context, index) {
+                            final item = initialItems[index];
+                            return Padding(
+                                padding: const EdgeInsets.only(right: 16),
+                                child: TVCard(
+                                    cover: item.cover,
+                                    title: item.title,
+                                    width: 150, 
+                                    onSelect: () {
+                                        final path = item.routerPath;
+                                        if (path.isNotEmpty) {
+                                            Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                    builder: (_) => DetailsScreen(url: path),
+                                                ),
+                                            );
+                                        }
+                                    },
+                                ),
+                            );
+                        },
+                    ),
                 ),
-            ),
-        );
+            );
+        }
         widgets.add(const SizedBox(height: 32));
     }
 

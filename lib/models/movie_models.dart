@@ -264,17 +264,20 @@ class HomeItem {
 class HomeSection {
   final String title;
   final String type;
+  final String url;
   final List<HomeItem> items;
 
   HomeSection({
     required this.title,
     required this.type,
+    required this.url,
     required this.items,
   });
 
   factory HomeSection.fromJson(Map<String, dynamic> json) {
     final type = json['type'] as String? ?? 'UNKNOWN';
     final title = json['title'] as String? ?? '';
+    final url = json['url'] as String? ?? '';
     
     List<HomeItem> items = [];
 
@@ -303,6 +306,7 @@ class HomeSection {
     return HomeSection(
       title: title,
       type: type,
+      url: url,
       items: items,
     );
   }
