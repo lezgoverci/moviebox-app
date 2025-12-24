@@ -94,7 +94,6 @@ client = httpx.AsyncClient(
         "Origin": TARGET_BASE_URL,
         "Accept": "application/json",
         "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "identity",  # Request uncompressed content to avoid decompression issues
     },
     follow_redirects=True,
     timeout=30.0,
@@ -159,7 +158,7 @@ async def proxy_api(path: str, request: Request):
     headers = {}
     for key, value in request.headers.items():
         key_lower = key.lower()
-        if key_lower in ["host", "content-length"]:
+        if key_lower in ["host", "content-length", "accept-encoding"]:
             continue
         
         # Exclude original Referer/Origin; we will set them centrally
@@ -200,14 +199,8 @@ async def proxy_api(path: str, request: Request):
             if key.lower() not in skip_headers:
                 filtered_headers[key] = value
         
-        # Decompress gzip content if needed
+        # Content is already decompressed by httpx
         content = response.content
-        content_encoding = response.headers.get("content-encoding", "").lower()
-        if content_encoding == "gzip" and content[:2] == b'\x1f\x8b':
-            try:
-                content = gzip.decompress(content)
-            except Exception as e:
-                print(f"Failed to decompress gzip: {e}")
         
         # Prevent Cloudflare/Render from re-compressing the response
         filtered_headers["Content-Encoding"] = "identity"
@@ -241,7 +234,7 @@ async def proxy_html(path: str, request: Request):
     headers = {}
     for key, value in request.headers.items():
         key_lower = key.lower()
-        if key_lower in ["host", "content-length"]:
+        if key_lower in ["host", "content-length", "accept-encoding"]:
             continue
         
         if key_lower in ["referer", "origin"]:
@@ -258,14 +251,8 @@ async def proxy_html(path: str, request: Request):
             if key.lower() not in skip_headers:
                 filtered_headers[key] = value
         
-        # Decompress gzip content if needed
+        # Content is already decompressed by httpx
         content = response.content
-        content_encoding = response.headers.get("content-encoding", "").lower()
-        if content_encoding == "gzip" and content[:2] == b'\x1f\x8b':
-            try:
-                content = gzip.decompress(content)
-            except Exception as e:
-                print(f"Failed to decompress gzip: {e}")
         
         # Prevent Cloudflare/Render from re-compressing the response
         filtered_headers["Content-Encoding"] = "identity"

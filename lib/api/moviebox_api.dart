@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show gzip;
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:cookie_jar/cookie_jar.dart';
@@ -28,10 +29,55 @@ class MovieboxApi {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': baseUrl,
         'Origin': baseUrl,
+        'Accept-Encoding': 'gzip, deflate, br',
         // Skip ngrok's browser warning page for free tier
         'ngrok-skip-browser-warning': 'true',
       },
        validateStatus: (status) => status != null && status < 500,
+       // We set responseType to bytes so we can manually decompress if needed
+       responseType: ResponseType.bytes,
+    ));
+
+    // Add interceptor to handle decompression and JSON parsing
+    _dio.interceptors.add(InterceptorsWrapper(
+      onResponse: (response, handler) {
+        if (response.data is List<int>) {
+          final bytes = response.data as List<int>;
+          final contentEncoding = response.headers.value('content-encoding');
+          
+          List<int> decompressed;
+          if (contentEncoding == 'gzip' || (bytes.length > 2 && bytes[0] == 0x1f && bytes[1] == 0x8b)) {
+            try {
+              decompressed = gzip.decode(bytes);
+            } catch (e) {
+              print('Manual decompression failed: $e');
+              decompressed = bytes;
+            }
+          } else {
+            decompressed = bytes;
+          }
+
+          final contentType = response.headers.value('content-type');
+          if (contentType?.contains('application/json') == true) {
+            try {
+              final stringData = utf8.decode(decompressed);
+              response.data = jsonDecode(stringData);
+            } catch (e) {
+              print('JSON decode failed after decompression: $e');
+              // Fallback to string if JSON decode fails
+              response.data = utf8.decode(decompressed);
+            }
+          } else {
+            // Text or HTML content
+            try {
+              response.data = utf8.decode(decompressed);
+            } catch (e) {
+              // Stay as bytes if not UTF-8
+            }
+          }
+        }
+        return handler.next(response);
+      },
     ));
   }
 
