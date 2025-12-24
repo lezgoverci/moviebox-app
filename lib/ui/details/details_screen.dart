@@ -75,13 +75,65 @@ class _DetailsScreenState extends State<DetailsScreen> {
     setState(() => _loading = true);
     try {
       final api = context.read<MovieboxApi>();
-      print('DEBUG: Playing video. isSeries: ${_detail!.isSeries}, subjectType: ${_detail!.subjectType}, episodeId: $episodeId');
+      
+      // Default to Season 1, Episode 1
+      int seasonNumber = 1;
+      int episodeNumber = 1;
+      
+      // If episodeId is provided, find the exact season and episode number
+      if (episodeId != null && _detail != null) {
+          bool found = false;
+          for (int s = 0; s < _detail!.seasons.length; s++) {
+              final season = _detail!.seasons[s];
+              for (final ep in season.episodes) {
+                  if (ep.id == episodeId) {
+                      seasonNumber = s + 1; // Assuming 1-based index for API
+                      episodeNumber = ep.episodeNumber;
+                      found = true;
+                      break;
+                  }
+              }
+              if (found) break;
+          }
+          
+          // Fallback if not found (e.g. if episodeId IS the number)
+          if (!found && int.tryParse(episodeId) != null) {
+              episodeNumber = int.parse(episodeId);
+          }
+      }
+      
+      print('DEBUG: Playing video. isSeries: ${_detail!.isSeries}, Season: $seasonNumber, Episode: $episodeNumber');
+      
       final streamUrl = await api.getStreamingLink(
         _detail!.id,
-        episode: (episodeId != null) ? int.parse(episodeId) : 1,
+        season: seasonNumber,
+        episode: episodeNumber,
         detailPath: _detail!.detailPath,
         isSeries: _detail!.isSeries,
       );
+      
+      // Fetch subtitles for this specific episode
+      List<SubtitleInfo> episodeSubtitles = [];
+      SubtitleInfo? initialSubtitle;
+      
+      try {
+        final downloadInfo = await api.getDownloadLinks(
+          _detail!.id,
+          season: seasonNumber,
+          episode: episodeNumber,
+          detailPath: _detail!.detailPath,
+          isSeries: _detail!.isSeries,
+        );
+        episodeSubtitles = downloadInfo?.allSubtitles ?? [];
+        if (episodeSubtitles.isNotEmpty) {
+           initialSubtitle = episodeSubtitles.firstWhere((s) => s.languageCode == 'en', orElse: () => episodeSubtitles.first);
+        }
+      } catch (e) {
+        print("Error fetching subtitles for episode: $e");
+        // Fallback to global subtitles if episode specific fails
+        episodeSubtitles = _subtitles;
+        initialSubtitle = _selectedSubtitle;
+      }
       
       if (mounted) {
         setState(() => _loading = false);
@@ -92,8 +144,8 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 videoUrl: streamUrl,
                 title: title ?? _detail!.title,
                 detailPath: _detail!.detailPath ?? '',
-                subtitles: _subtitles,
-                initialSubtitle: _selectedSubtitle,
+                subtitles: episodeSubtitles,
+                initialSubtitle: initialSubtitle ?? _selectedSubtitle,
               ),
             ),
           );
