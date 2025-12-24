@@ -209,8 +209,9 @@ async def proxy_api(path: str, request: Request):
             except Exception as e:
                 print(f"Failed to decompress gzip: {e}")
         
-        # Explicitly set identity encoding to prevent Render from re-compressing
+        # Prevent Cloudflare/Render from re-compressing the response
         filtered_headers["Content-Encoding"] = "identity"
+        filtered_headers["Cache-Control"] = "no-transform"
         
         return Response(
             content=content,
@@ -266,8 +267,9 @@ async def proxy_html(path: str, request: Request):
             except Exception as e:
                 print(f"Failed to decompress gzip: {e}")
         
-        # Explicitly set identity encoding to prevent Render from re-compressing
+        # Prevent Cloudflare/Render from re-compressing the response
         filtered_headers["Content-Encoding"] = "identity"
+        filtered_headers["Cache-Control"] = "no-transform"
         
         return Response(
             content=content,
