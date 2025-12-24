@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -34,6 +35,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String _error = '';
   SubtitleInfo? _currentSubtitle;
   bool _showControls = true;
+  final FocusNode _playPauseNode = FocusNode();
+  final FocusNode _mainFocusNode = FocusNode();
+  Timer? _hideTimer;
 
   @override
   void initState() {
@@ -76,7 +80,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _toggleControls() {
-    setState(() => _showControls = !_showControls);
+    setState(() {
+      _showControls = !_showControls;
+      if (_showControls) {
+        _playPauseNode.requestFocus();
+        _startHideTimer();
+      } else {
+        _mainFocusNode.requestFocus();
+        _hideTimer?.cancel();
+      }
+    });
+  }
+
+  void _startHideTimer() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _showControls) {
+        setState(() => _showControls = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    _playPauseNode.dispose();
+    _mainFocusNode.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    player.dispose();
+    super.dispose();
   }
 
   void _showSubtitlePicker() {
@@ -92,8 +124,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
             itemCount: widget.subtitles.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
-                return ListTile(
-                  title: const Text("None", style: TextStyle(color: Colors.white)),
+                return _TVListTile(
+                  title: "None",
+                  isSelected: _currentSubtitle == null,
                   onTap: () {
                     player.setSubtitleTrack(SubtitleTrack.no());
                     setState(() => _currentSubtitle = null);
@@ -102,9 +135,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 );
               }
               final sub = widget.subtitles[index - 1];
-              return ListTile(
-                title: Text(sub.languageName, style: const TextStyle(color: Colors.white)),
-                trailing: _currentSubtitle?.id == sub.id ? const Icon(Icons.check, color: Colors.blue) : null,
+              return _TVListTile(
+                title: sub.languageName,
+                isSelected: _currentSubtitle?.id == sub.id,
                 onTap: () {
                   player.setSubtitleTrack(SubtitleTrack.uri(sub.url, title: sub.languageName));
                   setState(() => _currentSubtitle = sub);
@@ -118,111 +151,179 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    // Restore system UI mode
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    player.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 1. Full-screen Video
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _toggleControls,
-              child: Video(
-                controller: controller,
-                fill: Colors.black,
-                controls: NoVideoControls, // We can customize or hide default ones
-              ),
-            ),
-          ),
-          
-          // 2. Custom Overlay Controls
-          if (_showControls) ...[
-            // 2a. Back Button
-            Positioned(
-              top: 16,
-              left: 16,
-              child: SafeArea(
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black26,
-                    shape: const CircleBorder(),
+    // Request focus for play/pause button when controls are shown on first build
+    if (_showControls) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _showControls) {
+          _playPauseNode.requestFocus();
+        }
+      });
+    }
+
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
+        // Allow normal pop behavior, but ensure we clean up
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: KeyboardListener(
+          focusNode: FocusNode(), // Dummy focus node to capture events
+          autofocus: false,
+          onKeyEvent: (event) {
+            // This ensures all key events are captured by this screen
+            // The actual handling is done by Shortcuts/Actions below
+          },
+          child: Shortcuts(
+            shortcuts: <LogicalKeySet, Intent>{
+              LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
+              LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+              LogicalKeySet(LogicalKeyboardKey.arrowUp): const DirectionalFocusIntent(TraversalDirection.up),
+              LogicalKeySet(LogicalKeyboardKey.arrowDown): const DirectionalFocusIntent(TraversalDirection.down),
+              LogicalKeySet(LogicalKeyboardKey.arrowLeft): const DirectionalFocusIntent(TraversalDirection.left),
+              LogicalKeySet(LogicalKeyboardKey.arrowRight): const DirectionalFocusIntent(TraversalDirection.right),
+              LogicalKeySet(LogicalKeyboardKey.escape): const DismissIntent(),
+              LogicalKeySet(LogicalKeyboardKey.backspace): const DismissIntent(),
+            },
+            child: Actions(
+              actions: <Type, Action<Intent>>{
+                DismissIntent: CallbackAction<DismissIntent>(
+                  onInvoke: (_) {
+                    if (_showControls) {
+                      _toggleControls(); // Use the logic that reclaimed focus
+                      return null;
+                    }
+                    Navigator.of(context).pop();
+                    return null;
+                  },
+                ),
+                ActivateIntent: CallbackAction<ActivateIntent>(
+                  onInvoke: (_) {
+                    if (!_showControls) {
+                      _toggleControls();
+                      return null;
+                    }
+                    return null; // Let the focused widget handle it
+                  },
+                ),
+              },
+              child: FocusScope(
+                autofocus: true,
+                child: Focus(
+                  focusNode: _mainFocusNode,
+                  autofocus: true,
+                  onKeyEvent: (node, event) {
+                    // Consume all key events to prevent them from bubbling up
+                    // The actual handling is done by the Shortcuts widget above
+                    return KeyEventResult.ignored;
+                  },
+                  child: Stack(
+            children: [
+              // 1. Full-screen Video
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _toggleControls,
+                  child: Video(
+                    controller: controller,
+                    fill: Colors.black,
+                    controls: NoVideoControls,
                   ),
                 ),
               ),
-            ),
+              
+              // 2. Custom Overlay Controls
+              if (_showControls) 
+                FocusTraversalGroup(
+                  child: Stack(
+                    children: [
+                      // Dark Overlay
+                      Positioned.fill(
+                        child: Container(color: Colors.black45),
+                      ),
+                      
+                      // 2a. Back Button
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: SafeArea(
+                          child: _PlayerControlButton(
+                            icon: Icons.arrow_back,
+                            size: 30,
+                            onPressed: () => Navigator.of(context).pop(),
+                            tooltip: "Back",
+                          ),
+                        ),
+                      ),
 
-            // 2b. Subtitle/Settings Button
-            if (widget.subtitles.isNotEmpty)
-              Positioned(
-                top: 16,
-                right: 16,
-                child: SafeArea(
-                  child: IconButton(
-                    icon: const Icon(Icons.closed_caption, color: Colors.white, size: 30),
-                    onPressed: _showSubtitlePicker,
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.black26,
-                      shape: const CircleBorder(),
-                      padding: const EdgeInsets.all(12),
-                    ),
-                    tooltip: "Subtitles",
+                      // 2b. Subtitle Button
+                      if (widget.subtitles.isNotEmpty)
+                        Positioned(
+                          top: 16,
+                          right: 16,
+                          child: SafeArea(
+                            child: _PlayerControlButton(
+                              icon: Icons.closed_caption,
+                              size: 30,
+                              onPressed: _showSubtitlePicker,
+                              tooltip: "Subtitles",
+                            ),
+                          ),
+                        ),
+
+                      // 2c. Playback Controls
+                      Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _PlayerControlButton(
+                              icon: Icons.replay_10,
+                              size: 48,
+                              onPressed: () {
+                                final position = player.state.position;
+                                player.seek(position - const Duration(seconds: 10));
+                                _startHideTimer();
+                              },
+                              tooltip: "Rewind 10s",
+                            ),
+                            const SizedBox(width: 32),
+                            StreamBuilder<bool>(
+                              stream: player.stream.playing,
+                              builder: (context, snapshot) {
+                                final isPlaying = snapshot.data ?? player.state.playing;
+                                return _PlayerControlButton(
+                                  focusNode: _playPauseNode,
+                                  icon: isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                  size: 80,
+                                  onPressed: () {
+                                    player.playOrPause();
+                                    _startHideTimer();
+                                  },
+                                  tooltip: isPlaying ? "Pause" : "Play",
+                                  primary: true,
+                                  autofocus: true,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 32),
+                            _PlayerControlButton(
+                              icon: Icons.forward_10,
+                              size: 48,
+                              onPressed: () {
+                                final position = player.state.position;
+                                player.seek(position + const Duration(seconds: 10));
+                                _startHideTimer();
+                              },
+                              tooltip: "Fast Forward 10s",
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-
-            // 2c. Playback Controls (Rewind, Play/Pause, Fast-Forward)
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _PlayerControlButton(
-                    icon: Icons.replay_10,
-                    size: 48,
-                    onPressed: () {
-                      final position = player.state.position;
-                      player.seek(position - const Duration(seconds: 10));
-                    },
-                    tooltip: "Rewind 10s",
-                  ),
-                  const SizedBox(width: 32),
-                  StreamBuilder<bool>(
-                    stream: player.stream.playing,
-                    builder: (context, snapshot) {
-                      final isPlaying = snapshot.data ?? player.state.playing;
-                      return _PlayerControlButton(
-                        icon: isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                        size: 80,
-                        onPressed: () => player.playOrPause(),
-                        tooltip: isPlaying ? "Pause" : "Play",
-                        primary: true,
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 32),
-                  _PlayerControlButton(
-                    icon: Icons.forward_10,
-                    size: 48,
-                    onPressed: () {
-                      final position = player.state.position;
-                      player.seek(position + const Duration(seconds: 10));
-                    },
-                    tooltip: "Fast Forward 10s",
-                  ),
-                ],
-              ),
-            ),
-          ],
 
           // 3. Error Overlay
           if (_error.isNotEmpty)
@@ -254,8 +355,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
             ),
         ],
-      ),
-    );
+      ), // Stack
+    ), // Focus
+    ), // FocusScope
+    ), // Actions
+    ), // Shortcuts
+    ), // KeyboardListener
+    ), // Scaffold
+    ); // PopScope
   }
 }
 
@@ -265,6 +372,8 @@ class _PlayerControlButton extends StatefulWidget {
   final VoidCallback onPressed;
   final String tooltip;
   final bool primary;
+  final bool autofocus;
+  final FocusNode? focusNode;
 
   const _PlayerControlButton({
     required this.icon,
@@ -272,6 +381,8 @@ class _PlayerControlButton extends StatefulWidget {
     required this.onPressed,
     required this.tooltip,
     this.primary = false,
+    this.autofocus = false,
+    this.focusNode,
   });
 
   @override
@@ -284,6 +395,8 @@ class _PlayerControlButtonState extends State<_PlayerControlButton> {
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
       onFocusChange: (f) => setState(() => _focused = f),
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
@@ -295,13 +408,64 @@ class _PlayerControlButtonState extends State<_PlayerControlButton> {
       child: IconButton(
         icon: Icon(widget.icon),
         iconSize: widget.size,
-        color: _focused ? Colors.white : (widget.primary ? Colors.white : Colors.white70),
+        color: _focused ? Colors.black : Colors.white,
         onPressed: widget.onPressed,
         tooltip: widget.tooltip,
         style: IconButton.styleFrom(
-          backgroundColor: _focused ? Colors.white.withOpacity(0.2) : Colors.transparent,
-          side: _focused ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none,
+          backgroundColor: _focused ? Colors.white : Colors.black26,
           padding: const EdgeInsets.all(12),
+          shape: const CircleBorder(),
+        ),
+      ),
+    );
+  }
+}
+class _TVListTile extends StatefulWidget {
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _TVListTile({
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  State<_TVListTile> createState() => _TVListTileState();
+}
+
+class _TVListTileState extends State<_TVListTile> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      onFocusChange: (f) => setState(() => _focused = f),
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => widget.onTap()),
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: _focused ? Colors.white : (widget.isSelected ? Colors.white24 : Colors.transparent),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            widget.title,
+            style: TextStyle(
+              color: _focused ? Colors.black : Colors.white,
+              fontWeight: widget.isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
         ),
       ),
     );
